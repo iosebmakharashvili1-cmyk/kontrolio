@@ -1,24 +1,20 @@
 /* ============================================================
    kontrolio-api — server.js
    ------------------------------------------------------------
-   მონაცემები ინახება ერთ JSON ფაილში (data/reports.json),
+   მონაცემები ინახება ერთ JSON ფაილში (data/store.json):
+     { reports: { [stopId]: {status, ts, reportDate} },
+       activity: [ {stopName, status, ts, reportDate}, ... ] }
    in-memory ქეშით წასაკითხი სიჩქარისთვის და ატომური ჩაწერით
-   (temp ფაილი + rename), რომ ჩაწერის შუაში crash-მა ფაილი არ
-   დააფუჭოს.
+   (temp ფაილი + rename).
 
-   ამ ამოცანისთვის (ერთი სტატუსი თითო გაჩერებაზე, ყოველდღე
-   იშლება) ეს გაცილებით მარტივი და სტაბილურია, ვიდრე native
-   SQLite მოდული (better-sqlite3), რომელსაც Docker build-ის დროს
-   ნატივი კომპილაცია სჭირდება და ხშირად ეგენერირებს build
-   პრობლემებს სხვადასხვა Node/CPU არქიტექტურაზე. თუ მომავალში
-   საჩერებების ისტორიის შენახვა/ანალიტიკა დაგვინდება, მარტივად
-   გადავინაცვლებთ Postgres/SQLite-ზე — ეს ფაილი მხოლოდ
-   "DATA LAYER" სექციას ეხება.
+   "სერვის დღე" იშლება ყოველდღე 23:30 საათზე (თბილისის დროით),
+   ღამის 00:00-ის ნაცვლად.
 
    ენდპოინტები:
-   GET  /api/reports  -> { stopId: {status, ts}, ... }  (მხოლოდ დღევანდელი)
-   POST /api/reports  -> { stopId, status } ქმნის/ანახლებს ჩანაწერს
-   GET  /api/health   -> { ok: true }
+   GET  /api/reports   -> { stopId: {status, ts}, ... }  (მხოლოდ მიმდინარე სერვის-დღის)
+   POST /api/reports   -> { stopId, status, stopName } ქმნის/ანახლებს ჩანაწერს + activity-ს
+   GET  /api/activity  -> [ {stopName, status, ts}, ... ]  (უახლესი წინ, მხოლოდ დღევანდელი)
+   GET  /api/health    -> { ok: true }
    ============================================================ */
 
 const express = require("express");
@@ -26,22 +22,26 @@ const path = require("path");
 const fs = require("fs");
 
 const DATA_DIR = path.join(__dirname, "data");
-const DATA_FILE = path.join(DATA_DIR, "reports.json");
+const DATA_FILE = path.join(DATA_DIR, "store.json");
+const MAX_ACTIVITY_ENTRIES = 500;
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 /* ---------- in-memory state, დისკზე სარეზერვო ასლით ---------- */
-// ფორმატი: { [stopId]: { status: "inspector"|"clear", ts: number, reportDate: "YYYY-MM-DD" } }
-let store = {};
+let store = { reports: {}, activity: [] };
 
 function loadStore() {
   try {
     if (fs.existsSync(DATA_FILE)) {
-      store = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+      const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+      store = {
+        reports: parsed.reports || {},
+        activity: Array.isArray(parsed.activity) ? parsed.activity : [],
+      };
     }
   } catch (err) {
-    console.error("reports.json წაკითხვა ჩავარდა, ვაგრძელებთ ცარიელით:", err.message);
-    store = {};
+    console.error("store.json წაკითხვა ჩავარდა, ვაგრძელებთ ცარიელით:", err.message);
+    store = { reports: {}, activity: [] };
   }
 }
 
@@ -53,42 +53,75 @@ function persistStore() {
 
 loadStore();
 
-/* ---------- თბილისის თარიღი, server-ის timezone-ის მიუხედავად ---------- */
-function tbilisiDateKey(date = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", {
+/* ---------- "სერვის დღის" გასაანგარიშებელი ლოგიკა ----------
+   ნაცვლად ჩვეული კალენდარული თარიღისა (რომელიც 00:00-ზე იცვლება),
+   ჩვენი "დღე" იცვლება 23:30-ზე. */
+const CUTOFF_HOUR = 23;
+const CUTOFF_MINUTE = 30;
+
+function tbilisiParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tbilisi",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
-}
-
-function msUntilNextTbilisiCleanupWindow() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Tbilisi",
     hour: "numeric",
     minute: "numeric",
     second: "numeric",
     hour12: false,
-  }).formatToParts(now);
+  }).formatToParts(date);
   const get = (t) => Number(parts.find((p) => p.type === t).value);
-  const secondsSinceMidnight = get("hour") * 3600 + get("minute") * 60 + get("second");
-  const targetSeconds = 5 * 60; // 00:05 თბილისის დროით
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour") % 24,
+    minute: get("minute"),
+    second: get("second"),
+  };
+}
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function serviceDayKey(date = new Date()) {
+  const p = tbilisiParts(date);
+  const afterCutoff =
+    p.hour > CUTOFF_HOUR || (p.hour === CUTOFF_HOUR && p.minute >= CUTOFF_MINUTE);
+
+  if (!afterCutoff) {
+    return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
+  }
+  const next = new Date(Date.UTC(p.year, p.month - 1, p.day, 12, 0, 0));
+  next.setUTCDate(next.getUTCDate() + 1);
+  return `${next.getUTCFullYear()}-${pad2(next.getUTCMonth() + 1)}-${pad2(next.getUTCDate())}`;
+}
+
+function msUntilNextCleanupWindow() {
+  const p = tbilisiParts();
+  const secondsSinceMidnight = p.hour * 3600 + p.minute * 60 + p.second;
+  const targetSeconds = CUTOFF_HOUR * 3600 + CUTOFF_MINUTE * 60; // 23:30
   let diff = targetSeconds - secondsSinceMidnight;
   if (diff <= 0) diff += 24 * 3600;
   return diff * 1000;
 }
 
-function cleanupOldReports() {
-  const today = tbilisiDateKey();
+function cleanupOldData() {
+  const current = serviceDayKey();
   let removed = 0;
-  for (const stopId of Object.keys(store)) {
-    if (store[stopId].reportDate !== today) {
-      delete store[stopId];
+
+  for (const stopId of Object.keys(store.reports)) {
+    if (store.reports[stopId].reportDate !== current) {
+      delete store.reports[stopId];
       removed++;
     }
   }
+
+  const beforeLen = store.activity.length;
+  store.activity = store.activity.filter((a) => a.reportDate === current);
+  removed += beforeLen - store.activity.length;
+
   if (removed > 0) {
     persistStore();
     console.log(`[cleanup] წაიშალა ${removed} ძველი ჩანაწერი (${new Date().toISOString()})`);
@@ -97,21 +130,19 @@ function cleanupOldReports() {
 
 function scheduleCleanup() {
   setTimeout(() => {
-    cleanupOldReports();
+    cleanupOldData();
     scheduleCleanup();
-  }, msUntilNextTbilisiCleanupWindow());
+  }, msUntilNextCleanupWindow());
 }
 
 /* ---------- Express app ---------- */
 const app = express();
 app.use(express.json());
 
-// მსუბუქი CORS — სასარგებლო, თუ API ცალკე origin-იდან გამოძახდება
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type");
-  // Cloudflare-ს ნაცემან cache-ში არ "ჩარჩეს" ეს დინამიური მონაცემები
   res.header("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
@@ -120,10 +151,10 @@ app.use((req, res, next) => {
 const VALID_STATUSES = new Set(["inspector", "clear"]);
 
 app.get("/api/reports", (req, res) => {
-  const today = tbilisiDateKey();
+  const current = serviceDayKey();
   const out = {};
-  for (const [stopId, rec] of Object.entries(store)) {
-    if (rec.reportDate === today) {
+  for (const [stopId, rec] of Object.entries(store.reports)) {
+    if (rec.reportDate === current) {
       out[stopId] = { status: rec.status, ts: rec.ts };
     }
   }
@@ -131,7 +162,7 @@ app.get("/api/reports", (req, res) => {
 });
 
 app.post("/api/reports", (req, res) => {
-  const { stopId, status } = req.body || {};
+  const { stopId, status, stopName } = req.body || {};
 
   if (typeof stopId !== "string" || !stopId.trim()) {
     return res.status(400).json({ error: "stopId is required" });
@@ -141,12 +172,28 @@ app.post("/api/reports", (req, res) => {
   }
 
   const ts = Date.now();
-  const reportDate = tbilisiDateKey();
+  const reportDate = serviceDayKey();
+  const safeName =
+    typeof stopName === "string" && stopName.trim()
+      ? stopName.trim().slice(0, 120)
+      : "გაჩერება";
 
-  store[stopId] = { status, ts, reportDate };
+  store.reports[stopId] = { status, ts, reportDate };
+
+  store.activity.push({ stopName: safeName, status, ts, reportDate });
+  if (store.activity.length > MAX_ACTIVITY_ENTRIES) {
+    store.activity = store.activity.slice(-MAX_ACTIVITY_ENTRIES);
+  }
+
   persistStore();
-
   res.json({ stopId, status, ts });
+});
+
+app.get("/api/activity", (req, res) => {
+  const current = serviceDayKey();
+  const todays = store.activity.filter((a) => a.reportDate === current);
+  const recent = todays.slice(-100).reverse(); // უახლესი წინ
+  res.json(recent.map((a) => ({ stopName: a.stopName, status: a.status, ts: a.ts })));
 });
 
 app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
@@ -154,6 +201,6 @@ app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISO
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`kontrolio-api listening on :${PORT}`);
-  cleanupOldReports();
+  cleanupOldData();
   scheduleCleanup();
 });
