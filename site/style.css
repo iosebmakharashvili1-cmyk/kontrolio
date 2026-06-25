@@ -1,18 +1,27 @@
 /* ---------- Tokens ---------- */
 :root{
-  --navy: #14192b;
-  --navy-soft: #1d2438;
-  --paper: #f4f3ee;
-  --amber: #ffb627;
+  --bus-blue: #1f6fd6;
   --red: #e4483c;
   --red-soft: #ffd6d2;
   --green: #2ec4b6;
   --green-soft: #d4f3ef;
   --grey: #8a8f9c;
   --grey-soft: #e7e7ea;
-  --bus-blue: #1f6fd6;
+  --ring: #f4f3ee; /* მარკერების/კლასტერების მუდმივი ღია რგოლი */
   --shadow: 0 12px 30px rgba(20,25,43,0.25);
   --radius: 18px;
+
+  --page-bg: #dfe5e0;
+  --surface: #f4f3ee;
+  --text: #14192b;
+  --chrome-bg-solid: rgba(255,255,255,0.92);
+  --chrome-grad-start: rgba(255,255,255,0.92);
+  --chrome-grad-end: rgba(255,255,255,0);
+  --chrome-text: #14192b;
+  --chrome-btn-bg: rgba(20,25,43,0.06);
+  --chrome-btn-bg-hover: rgba(20,25,43,0.12);
+  --chrome-btn-border: rgba(20,25,43,0.16);
+
   font-family: 'Noto Sans Georgian', system-ui, sans-serif;
 }
 
@@ -20,28 +29,53 @@
 
 html, body{
   margin:0; padding:0; height:100%; width:100%;
-  background: var(--navy);
-  color: var(--navy);
+  background: var(--page-bg);
+  color: var(--text);
   overflow:hidden;
 }
 
 /* ---------- Map ---------- */
 #map{
-  position:absolute; inset:0;
+  position:absolute; top:0; left:0; bottom:0; right:0;
   z-index:1;
+  transition: right 0.25s ease;
 }
 
 .leaflet-container{
-  background:#dfe5e0;
+  background: var(--page-bg);
   font-family: 'Noto Sans Georgian', system-ui, sans-serif;
 }
+
+/* Leaflet-ის ჩაშენებული zoom-ანიმაცია უკვე ცდილობს სიგლუვეს —
+   ამ ცვლადებს მხოლოდ მცირედ ვამარტივებთ უფრო "rubber" შეგრძნებისთვის. */
+.leaflet-fade-anim .leaflet-tile{ transition: opacity 0.2s linear; }
+.leaflet-zoom-anim .leaflet-zoom-animated{ transition: transform 0.28s cubic-bezier(0.22, 0.86, 0.4, 1); }
+
+/* ---------- Slick zoom-control ---------- */
+.leaflet-control-zoom{
+  border:none !important;
+  border-radius: 14px !important;
+  overflow:hidden;
+  box-shadow: var(--shadow);
+}
+.leaflet-control-zoom a{
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  width:36px !important; height:36px !important; line-height:36px !important;
+  font-size:18px !important;
+  border:none !important;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.leaflet-control-zoom-in{ border-bottom: 1px solid var(--grey-soft) !important; }
+.leaflet-control-zoom a:hover{ background: var(--grey-soft) !important; }
+.leaflet-control-zoom a:active{ transform: scale(0.9); }
 
 /* ---------- Top bar ---------- */
 .topbar{
   position:absolute; top:0; left:0; right:0; z-index:500;
   display:flex; align-items:center; justify-content:space-between;
   padding: 14px 16px;
-  background: linear-gradient(180deg, rgba(20,25,43,0.92), rgba(20,25,43,0));
+  background: linear-gradient(180deg, var(--chrome-grad-start), var(--chrome-grad-end));
   pointer-events:none;
 }
 .topbar > *{ pointer-events:auto; }
@@ -50,7 +84,7 @@ html, body{
   display:flex; align-items:center; gap:10px;
 }
 .topbar__title h1{
-  color: var(--paper);
+  color: var(--chrome-text);
   font-size: 17px;
   font-weight: 700;
   margin:0;
@@ -64,16 +98,21 @@ html, body{
   flex-shrink:0;
 }
 
+.topbar__actions{
+  display:flex; align-items:center; gap:8px;
+}
+
 .iconbtn{
   width:34px; height:34px; border-radius:50%;
-  border:1px solid rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.08);
-  color: var(--paper);
+  border:1px solid var(--chrome-btn-border);
+  background: var(--chrome-btn-bg);
+  color: var(--chrome-text);
   font-weight:700;
   font-size:15px;
   cursor:pointer;
+  transition: background-color 0.15s ease;
 }
-.iconbtn:hover{ background: rgba(255,255,255,0.18); }
+.iconbtn:hover{ background: var(--chrome-btn-bg-hover); }
 
 /* ---------- Search ---------- */
 .searchWrap{
@@ -86,8 +125,8 @@ html, body{
   padding: 12px 16px;
   font-family: inherit;
   font-size: 14px;
-  color: var(--navy);
-  background: var(--paper);
+  color: var(--text);
+  background: var(--surface);
   box-shadow: var(--shadow);
 }
 .searchInput:focus{ outline: 2px solid var(--bus-blue); }
@@ -95,7 +134,7 @@ html, body{
 .searchResults{
   display:none;
   position:absolute; top: calc(100% + 6px); left:0; right:0;
-  background: var(--paper);
+  background: var(--surface);
   border-radius: 14px;
   box-shadow: var(--shadow);
   max-height: 280px;
@@ -108,7 +147,7 @@ html, body{
   cursor:pointer;
   border-bottom: 1px solid var(--grey-soft);
   font-size: 14px;
-  color: var(--navy);
+  color: var(--text);
 }
 .searchResult:last-child{ border-bottom:none; }
 .searchResult:hover{ background: var(--grey-soft); }
@@ -127,8 +166,8 @@ html, body{
 /* ---------- Legend ---------- */
 .legend{
   position:absolute; left:14px; bottom:24px; z-index:500;
-  background: rgba(20,25,43,0.88);
-  color: var(--paper);
+  background: var(--chrome-bg-solid);
+  color: var(--chrome-text);
   border-radius: 14px;
   padding: 10px 14px;
   display:flex; flex-direction:column; gap:6px;
@@ -139,35 +178,27 @@ html, body{
 .legend__dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 .legend__dot--inspector{ background: var(--red); }
 .legend__dot--clear{ background: var(--green); }
-.legend__dot--unknown{ background: var(--grey); }
-
-.resetNote{
-  position:absolute; right:14px; bottom:24px; z-index:500;
-  color: rgba(244,243,238,0.65);
-  font-size: 11px;
-  max-width: 160px;
-  text-align:right;
-  margin:0;
-}
+.legend__dot--unknown{ background: var(--bus-blue); }
 
 /* ---------- Custom markers ----------
-   ბაზა ყოველთვის ლურჯი ავტობუსის icon-ია; სტატუსი მარკერის
-   გარშემო რგოლის ფერით ვაჩვენებთ, რომ icon-ის იდენტობა არ იცვლება. */
+   სტატუსის მიხედვით მთლიანი ფონი იცვლება ფერს (და არა მხოლოდ
+   რგოლი) — ლურჯი = უცნობი, წითელი = კონტროლიორი, მწვანე = თავისუფალია.
+   რგოლი (--ring) მუდმივი ღია ფერია, რომ კონტრასტი რუკაზე
+   ყოველთვის შენარჩუნდეს. */
 .stopMarker{
   width: 30px; height:30px;
   border-radius:50%;
-  background: var(--bus-blue);
   display:flex; align-items:center; justify-content:center;
-  color: var(--paper);
-  border: 3px solid var(--paper);
+  color: var(--ring);
+  border: 3px solid var(--ring);
   box-shadow: 0 2px 6px rgba(0,0,0,0.35);
 }
 .stopMarker svg{ width:16px; height:16px; }
 
-.stopMarker--unknown{ border-color: var(--paper); }
-.stopMarker--clear{ border-color: var(--green); }
+.stopMarker--unknown{ background: var(--bus-blue); }
+.stopMarker--clear{ background: var(--green); }
 .stopMarker--inspector{
-  border-color: var(--red);
+  background: var(--red);
   animation: pulseMarker 1.6s infinite;
 }
 
@@ -186,29 +217,31 @@ html, body{
 .clusterIcon{
   width:38px; height:38px; border-radius:50%;
   background: var(--bus-blue);
-  color: var(--paper);
+  color: var(--ring);
   display:flex; align-items:center; justify-content:center;
   font-weight:700; font-size:13px;
-  border: 3px solid var(--paper);
+  border: 3px solid var(--ring);
   box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+}
+.clusterIcon--clear{
+  background: var(--green);
 }
 .clusterIcon--alert{
   background: var(--red);
-  border-color: var(--paper);
   animation: pulseMarker 1.6s infinite;
 }
 
 /* ---------- Overlay + bottom sheet ---------- */
 .overlay{
   position:absolute; inset:0; z-index:900;
-  background: rgba(20,25,43,0.45);
+  background: rgba(10,12,20,0.45);
   backdrop-filter: blur(2px);
 }
 .overlay.hidden{ display:none; }
 
 .sheet{
   position:absolute; left:0; right:0; bottom:0; z-index:950;
-  background: var(--paper);
+  background: var(--surface);
   border-radius: 22px 22px 0 0;
   padding: 10px 22px 26px;
   max-width: 480px;
@@ -227,13 +260,15 @@ html, body{
   width:40px; height:4px; border-radius:4px;
   background: var(--grey-soft);
   margin: 6px auto 14px;
+  flex-shrink:0;
 }
 
 .sheet h2{
   margin: 0 0 4px;
   font-size: 19px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--text);
+  flex-shrink:0;
 }
 .sheet__status{
   margin: 0 0 18px;
@@ -272,28 +307,132 @@ html, body{
 .sheet__close{
   width:100%;
   border:none; background: var(--grey-soft);
-  color: var(--navy);
+  color: var(--text);
   border-radius: 14px;
   padding: 12px;
   font-family: inherit;
   font-weight: 600;
   font-size: 14px;
   cursor:pointer;
+  flex-shrink:0;
 }
 
 .aboutText{
   font-size: 14px;
   line-height: 1.55;
-  color: var(--navy-soft);
+  color: var(--text);
   margin: 0 0 18px;
 }
 
-/* ---------- Toast ---------- */
+/* ---------- Activity panel ----------
+   დესკტოპზე: მუდმივი sidebar მარჯვნივ, რუკა მის გვერდით იკუმშება.
+   მობილურზე: ქვედა drawer, default-ად "peek" (დახურული) მდგომარეობაში,
+   header-ზე დაწკაპუნებით იხსნება/იხურება. */
+.activityPanel{
+  position:absolute; z-index: 700;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+
+.activityPanel__header{
+  padding: 16px 20px;
+  display:flex; align-items:center; justify-content:space-between;
+  flex-shrink:0;
+}
+.activityPanel__header h2{
+  margin:0; font-size:16px; font-weight:700; color:var(--text);
+}
+.activityPanel__chevron{
+  color: var(--grey);
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+.activityPanel__peek{
+  display:none;
+  margin: 0 20px 14px;
+  font-size: 13px;
+  color: var(--grey);
+}
+
+.activityList{
+  flex:1;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin: 0 16px 16px;
+}
+.activityItem{
+  display:flex; align-items:flex-start; gap:10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--grey-soft);
+}
+.activityItem__dot{
+  width:9px; height:9px; border-radius:50%;
+  margin-top:5px;
+  flex-shrink:0;
+}
+.activityItem__dot--inspector{ background: var(--red); }
+.activityItem__dot--clear{ background: var(--green); }
+.activityItem__body{ flex:1; min-width:0; }
+.activityItem__text{
+  font-size: 13.5px;
+  color: var(--text);
+  line-height:1.4;
+}
+.activityItem__time{
+  font-size: 11.5px;
+  color: var(--grey);
+  margin-top: 2px;
+}
+.activityEmpty{
+  color: var(--grey);
+  font-size: 13.5px;
+  text-align:center;
+  padding: 20px 0;
+}
+
+/* დესკტოპი/ტაბლეტი: მუდმივად ღია sidebar */
+@media (min-width: 768px){
+  .activityPanel{
+    top:0; right:0; bottom:0; left:auto;
+    width: 340px;
+    border-radius: 0;
+  }
+  .activityPanel__chevron{ display:none; }
+  .activityPanel__header{ cursor:default; }
+  #map{ right: 340px; }
+  .topbar{ right: 340px; }
+}
+
+/* მობილური: ქვედა drawer, peek/expanded ორ რეჟიმად */
+@media (max-width: 767px){
+  .activityPanel{
+    left:0; right:0; bottom:0; top:auto;
+    width:auto;
+    height: 76px;
+    border-radius: 20px 20px 0 0;
+    transition: height 0.25s ease;
+  }
+  .activityPanel__header{ cursor:pointer; }
+  .activityPanel__peek{ display:block; }
+  .activityList{ display:none; }
+
+  .activityPanel.expanded{ height: 58vh; }
+  .activityPanel.expanded .activityPanel__peek{ display:none; }
+  .activityPanel.expanded .activityList{ display:flex; }
+  .activityPanel.expanded .activityPanel__chevron{ transform: rotate(180deg); }
+}
+
+/* ---------- Toast (მუდმივად მუქი — snackbar-ის ჩვეული სტილი) ---------- */
 .toast{
   position:absolute; top:70px; left:50%; z-index:1000;
   transform: translate(-50%, -20px);
-  background: var(--navy);
-  color: var(--paper);
+  background: #14192b;
+  color: #f4f3ee;
   padding: 10px 18px;
   border-radius: 12px;
   font-size: 13px; font-weight:600;
@@ -310,5 +449,4 @@ html, body{
 /* ---------- Responsive ---------- */
 @media (max-width: 480px){
   .topbar__title h1{ font-size: 15px; }
-  .resetNote{ display:none; }
 }
