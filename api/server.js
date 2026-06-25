@@ -232,7 +232,9 @@ app.get("/api/arrivals", async (req, res) => {
         { headers: TTC_HEADERS }
       ).then(async (r) => {
         if (!r.ok) throw new Error(`upstream ${r.status} for ${id}`);
-        return r.json();
+        const json = await r.json();
+        console.log(`[ttc-raw] stop ${id}:`, JSON.stringify(json).slice(0, 500));
+        return json;
       })
     )
   );
