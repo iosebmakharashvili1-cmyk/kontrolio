@@ -8,7 +8,8 @@
    ერთ ჩანაწერში — `id` არის რეპორტინგის გასაღები (შესაძლოა
    კომპოზიტური, "id1+id2"), ხოლო `ids` შეიცავს ორიგინალ TTC
    stop-id(ebს), მომავალში მოსვლის დროების საპოვნელად:
-   { id, ids: [...], name, lat, lng, types: ["bus","minibus"], routes: [...] }
+   { id, ids: [...], name, lat, lng, types: ["bus","minibus"],
+     routesBus: [...], routesMinibus: [...] }
    ============================================================ */
 
 const STOPS_BY_ID = {};
@@ -57,6 +58,84 @@ async function fetchActivity() {
   }
 }
 
+/* ---------- მოსვლის დროები (TTC API, server-ის მეშვეობით) ----------
+   ეს ნაწილი არ არის 100%-ით დადასტურებული TTC-ის ნამდვილ JSON-ფორმატთან,
+   რადგან ტესტირება ჩემგან blocked იყო (datacenter IP). ამიტომ
+   extractArrivals() რამდენიმე გავრცელებულ ველის-სახელს ცდის და
+   რბილად ვარდება, თუ ფორმატი არ ემთხვევა — საჭიროების შემთხვევაში
+   მარტივად დასარეგულირებელია. */
+function pickField(obj, candidates) {
+  for (const key of candidates) {
+    if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
+  }
+  return null;
+}
+
+function extractArrivals(rawResponse) {
+  let list = null;
+  if (Array.isArray(rawResponse)) {
+    list = rawResponse;
+  } else if (rawResponse && typeof rawResponse === "object") {
+    const containerKeys = ["arrivals", "predictions", "stopTimes", "results", "data", "items"];
+    for (const key of containerKeys) {
+      if (Array.isArray(rawResponse[key])) {
+        list = rawResponse[key];
+        break;
+      }
+    }
+  }
+  if (!list) return [];
+
+  return list
+    .map((item) => {
+      const route = pickField(item, ["routeNumber", "routeShortName", "route", "routeNo", "number", "lineNumber"]);
+      const direction = pickField(item, ["headsign", "direction", "tripHeadsign", "destination", "directionName"]);
+      const isoTime = pickField(item, ["arrivalTime", "arrivalDateTime", "eta", "time", "scheduledTime"]);
+      const secondsField = pickField(item, ["secondsToArrival", "secondsLeft", "etaSeconds"]);
+      const minutesField = pickField(item, ["minutesToArrival", "minutes", "etaMinutes"]);
+
+      let etaMs = null;
+      if (typeof secondsField === "number") etaMs = Date.now() + secondsField * 1000;
+      else if (typeof minutesField === "number") etaMs = Date.now() + minutesField * 60000;
+      else if (typeof isoTime === "string") {
+        const parsed = Date.parse(isoTime);
+        if (!Number.isNaN(parsed)) etaMs = parsed;
+      }
+
+      return {
+        route: route !== null ? String(route) : "?",
+        direction: direction !== null ? String(direction) : "",
+        etaMs,
+      };
+    })
+    .filter((a) => a.etaMs !== null)
+    .sort((a, b) => a.etaMs - b.etaMs);
+}
+
+async function fetchArrivals(ids) {
+  try {
+    const res = await fetch(`${API_BASE}/arrivals?ids=${encodeURIComponent(ids.join(","))}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const stopsArr = Array.isArray(data.stops) ? data.stops : [];
+    const all = stopsArr.flatMap((raw) => extractArrivals(raw));
+    all.sort((a, b) => a.etaMs - b.etaMs);
+    return all.slice(0, 3);
+  } catch (err) {
+    console.error("arrivals fetch failed:", err);
+    return [];
+  }
+}
+
+function formatEta(etaMs) {
+  const minutes = Math.round((etaMs - Date.now()) / 60000);
+  if (minutes <= 0) return "ახლა";
+  if (minutes < 60) return `${minutes} წთ`;
+  return clockTime(etaMs);
+}
+
 /* ---------- დროის ფორმატირება ---------- */
 function timeAgo(ts) {
   const diffMs = Date.now() - ts;
@@ -96,6 +175,62 @@ const map = L.map("map", {
 }).setView([41.7151, 44.8271], 12.5);
 
 L.control.zoom({ position: "bottomright" }).addTo(map);
+
+/* ---------- "ჩემი ლოკაცია" ---------- */
+let userLocationMarker = null;
+
+function showUserLocation(lat, lng) {
+  if (userLocationMarker) {
+    userLocationMarker.setLatLng([lat, lng]);
+  } else {
+    userLocationMarker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: "",
+        html: '<div class="userDot"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      }),
+      interactive: false,
+      zIndexOffset: 1000,
+    }).addTo(map);
+  }
+}
+
+const LocateControl = L.Control.extend({
+  options: { position: "bottomright" },
+  onAdd: function () {
+    const btn = L.DomUtil.create("button", "leaflet-control locateBtn");
+    btn.type = "button";
+    btn.title = "ჩემი ლოკაცია";
+    btn.setAttribute("aria-label", "ჩემი ლოკაცია");
+    btn.innerHTML = "📍";
+    L.DomEvent.disableClickPropagation(btn);
+
+    btn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        showToast("გეოლოკაცია მხარდაუჭერელია 🙁");
+        return;
+      }
+      btn.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          showUserLocation(latitude, longitude);
+          map.setView([latitude, longitude], 16);
+          btn.disabled = false;
+        },
+        () => {
+          showToast("ლოკაციის წვდომა ვერ მოხერხდა 🙁");
+          btn.disabled = false;
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+
+    return btn;
+  },
+});
+map.addControl(new LocateControl());
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
@@ -186,29 +321,78 @@ function refreshMarker(stopId) {
 const overlay = document.getElementById("overlay");
 const sheet = document.getElementById("sheet");
 const sheetStopName = document.getElementById("sheetStopName");
-const sheetStatusLine = document.getElementById("sheetStatusLine");
+const sheetStatusBanner = document.getElementById("sheetStatusBanner");
+const sheetCaption = document.getElementById("sheetCaption");
+const sheetRouteChips = document.getElementById("sheetRouteChips");
+const arrivalsList = document.getElementById("arrivalsList");
 const btnInspector = document.getElementById("btnInspector");
 const btnClear = document.getElementById("btnClear");
 const sheetClose = document.getElementById("sheetClose");
 
 let activeStopId = null;
 
+function renderStatusBanner(report) {
+  if (!report) {
+    sheetStatusBanner.className = "statusBanner statusBanner--unknown";
+    sheetStatusBanner.textContent = "⚪ სტატუსი უცნობია";
+    sheetCaption.textContent = "ჯერ არავის შეუტყობინებია";
+    return;
+  }
+  if (report.status === "inspector") {
+    sheetStatusBanner.className = "statusBanner statusBanner--inspector";
+    sheetStatusBanner.textContent = "🔴 კონტროლიორი დგას";
+  } else {
+    sheetStatusBanner.className = "statusBanner statusBanner--clear";
+    sheetStatusBanner.textContent = "🟢 თავისუფალია";
+  }
+  sheetCaption.textContent = `ბოლო შეტყობინება: ${timeAgo(report.ts)}`;
+}
+
+function renderRouteChips(stop) {
+  const busChips = (stop.routesBus || []).map(
+    (r) => `<span class="routeChip routeChip--bus">${r}</span>`
+  );
+  const miniChips = (stop.routesMinibus || []).map(
+    (r) => `<span class="routeChip routeChip--minibus">${r}</span>`
+  );
+  const all = [...busChips, ...miniChips];
+  sheetRouteChips.innerHTML = all.length
+    ? all.join("")
+    : `<span class="routeChip routeChip--empty">მარშრუტი უცნობია</span>`;
+}
+
+function renderArrivalsList(arrivals, stop) {
+  if (!arrivals || arrivals.length === 0) {
+    arrivalsList.innerHTML = `<p class="arrivalsNote">ამ გაჩერებისთვის მონაცემი ვერ მოიძებნა</p>`;
+    return;
+  }
+  arrivalsList.innerHTML = arrivals
+    .map((a) => {
+      const isMinibus = (stop.routesMinibus || []).includes(a.route);
+      const chipClass = isMinibus ? "routeChip--minibus" : "routeChip--bus";
+      return `
+      <div class="arrivalItem">
+        <span class="routeChip ${chipClass}">${a.route}</span>
+        <span class="arrivalItem__direction">${a.direction || "—"}</span>
+        <span class="arrivalItem__time">${formatEta(a.etaMs)}</span>
+      </div>`;
+    })
+    .join("");
+}
+
+async function loadArrivalsForStop(stopId, stop) {
+  arrivalsList.innerHTML = `<p class="arrivalsNote">იტვირთება...</p>`;
+  const arrivals = await fetchArrivals(stop.ids && stop.ids.length ? stop.ids : [stop.id]);
+  if (activeStopId === stopId) renderArrivalsList(arrivals, stop);
+}
+
 function renderSheetInfo(stopId) {
   const stop = STOPS_BY_ID[stopId];
   const report = getReport(stopId);
 
-  const routesLine = stop.routes && stop.routes.length
-    ? `მარშრუტები: ${stop.routes.join(", ")}`
-    : "";
-
   sheetStopName.textContent = stop.name;
-  sheetStatusLine.innerHTML = [
-    typeLabel(stop.types),
-    routesLine,
-    report
-      ? `ბოლო შეტყობინება: ${report.status === "inspector" ? "კონტროლიორი დგას" : "თავისუფალია"} — ${timeAgo(report.ts)}`
-      : "ჯერ არავის შეუტყობინებია",
-  ].filter(Boolean).join("<br>");
+  renderStatusBanner(report);
+  renderRouteChips(stop);
 }
 
 function openSheet(stopId) {
@@ -216,6 +400,7 @@ function openSheet(stopId) {
   renderSheetInfo(stopId);
   overlay.classList.remove("hidden");
   sheet.classList.remove("hidden");
+  loadArrivalsForStop(stopId, STOPS_BY_ID[stopId]);
 }
 
 function closeSheet() {
@@ -364,7 +549,8 @@ function renderSearchResults(query) {
   } else {
     searchResults.innerHTML = matches
       .map((s) => {
-        const meta = [typeLabel(s.types), s.routes.length ? s.routes.join(", ") : null]
+        const allRoutes = [...(s.routesBus || []), ...(s.routesMinibus || [])];
+        const meta = [typeLabel(s.types), allRoutes.length ? allRoutes.join(", ") : null]
           .filter(Boolean)
           .join(" · ");
         return `<div class="searchResult" data-id="${s.id}">${s.name}<small>${meta}</small></div>`;

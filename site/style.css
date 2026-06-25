@@ -8,6 +8,7 @@
   --grey: #8a8f9c;
   --grey-soft: #e7e7ea;
   --ring: #f4f3ee; /* მარკერების/კლასტერების მუდმივი ღია რგოლი */
+  --user-loc: #8b5cf6;
   --shadow: 0 12px 30px rgba(20,25,43,0.25);
   --radius: 18px;
 
@@ -231,6 +232,33 @@ html, body{
   animation: pulseMarker 1.6s infinite;
 }
 
+/* ---------- "ჩემი ლოკაცია" ღილაკი (Leaflet custom control) ---------- */
+.locateBtn{
+  width:40px; height:40px; border-radius:50%;
+  background: var(--surface); color: var(--text);
+  border:none; box-shadow: var(--shadow);
+  font-size:18px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.locateBtn:hover{ background: var(--grey-soft); }
+.locateBtn:active{ transform: scale(0.92); }
+.locateBtn:disabled{ opacity:0.6; cursor:wait; }
+
+.userDot{
+  width:16px; height:16px; border-radius:50%;
+  background: var(--user-loc);
+  border: 3px solid var(--ring);
+  box-shadow: 0 0 0 0 rgba(139,92,246,0.55);
+  animation: pulseUserDot 2s infinite;
+}
+@keyframes pulseUserDot{
+  0%   { box-shadow: 0 0 0 0 rgba(139,92,246,0.5); }
+  70%  { box-shadow: 0 0 0 12px rgba(139,92,246,0); }
+  100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); }
+}
+
 /* ---------- Overlay + bottom sheet ---------- */
 .overlay{
   position:absolute; inset:0; z-index:900;
@@ -245,6 +273,8 @@ html, body{
   border-radius: 22px 22px 0 0;
   padding: 10px 22px 26px;
   max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
   margin: 0 auto;
   box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
   animation: slideUp 0.22s ease-out;
@@ -270,11 +300,84 @@ html, body{
   color: var(--text);
   flex-shrink:0;
 }
-.sheet__status{
-  margin: 0 0 18px;
-  font-size: 13px;
-  line-height: 1.6;
+.sheet__caption{
+  margin: 0 0 14px;
+  font-size: 12.5px;
   color: var(--grey);
+}
+
+/* ---------- სტატუსის ბანერი (გაჩერების დეტალებში) ---------- */
+.statusBanner{
+  display:flex; align-items:center; gap:8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px; font-weight:700;
+  margin-bottom: 6px;
+}
+.statusBanner--unknown{ background: var(--grey-soft); color: var(--text); }
+.statusBanner--clear{ background: var(--green-soft); color: #14685f; }
+.statusBanner--inspector{ background: var(--red-soft); color: #8a1f17; }
+
+/* ---------- მარშრუტების chip-ები ---------- */
+.routeChips{
+  display:flex; flex-wrap:wrap; gap:6px;
+  margin-bottom: 16px;
+}
+.routeChip{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width: 28px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  font-size: 12.5px; font-weight:700;
+  color: #fff;
+}
+.routeChip--bus{ background: var(--green); }
+.routeChip--minibus{ background: var(--bus-blue); }
+.routeChip--empty{
+  background: var(--grey-soft);
+  color: var(--grey);
+  font-weight:500;
+}
+
+/* ---------- მოსვლის დროები ---------- */
+.arrivalsSection h3{
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight:700;
+  color: var(--grey);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.arrivalsList{
+  display:flex; flex-direction:column; gap:6px;
+  margin-bottom: 16px;
+}
+.arrivalItem{
+  display:flex; align-items:center; gap:10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--grey-soft);
+}
+.arrivalItem__time{
+  font-size: 13px; font-weight:700;
+  color: var(--text);
+  min-width: 56px;
+}
+.arrivalItem__direction{
+  font-size: 13px;
+  color: var(--text);
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.arrivalsNote{
+  margin:0;
+  padding: 10px 0;
+  font-size: 13px;
+  color: var(--grey);
+  text-align:center;
 }
 
 .sheet__actions{

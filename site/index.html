@@ -63,7 +63,18 @@
   <div class="sheet hidden" id="sheet">
     <div class="sheet__handle"></div>
     <h2 id="sheetStopName">გაჩერება</h2>
-    <p id="sheetStatusLine" class="sheet__status">ჯერ არ არის შეტყობინება</p>
+
+    <div class="statusBanner" id="sheetStatusBanner">⚪ სტატუსი უცნობია</div>
+    <p class="sheet__caption" id="sheetCaption"></p>
+
+    <div class="routeChips" id="sheetRouteChips"></div>
+
+    <div class="arrivalsSection">
+      <h3>მოსვლის დრო</h3>
+      <div class="arrivalsList" id="arrivalsList">
+        <p class="arrivalsNote">იტვირთება...</p>
+      </div>
+    </div>
 
     <div class="sheet__actions">
       <button class="reportBtn reportBtn--inspector" id="btnInspector">
