@@ -104,12 +104,14 @@ html, body{
 .topbar{
   position:absolute; top:0; left:0; right:0; z-index:500;
   display:flex; 
-  align-items:flex-start; /* იცვლება center-დან, რომ ღილაკები ზემოთ დარჩეს */
+  align-items:flex-start; 
   justify-content:space-between;
-  padding: 14px 16px 72px 16px; /* 72px ქვედა ფედინგი ფარავს ძებნის ველს */
-  background: #0f1115; /* მუდმივად შავი/მუქი ფონი ორივე თემისთვის */
+  padding: 14px 16px 85px 16px; /* სივრცე ძებნის ველისთვის */
+  
+  /* მყარი ფერის მაგივრად ვიყენებთ რბილ გრადიენტს, რომელიც ნელ-ნელა ქრება */
+  background: linear-gradient(180deg, rgba(15,17,21,0.95) 0%, rgba(15,17,21,0.85) 45%, rgba(15,17,21,0) 100%);
   pointer-events:none;
-  box-shadow: 0 4px 30px rgba(0,0,0,0.4); /* ჰედერის ჩრდილი რუკაზე */
+  box-shadow: none; /* ჩრდილი აღარ გვინდა, ის ხისტ ხაზს აჩენდა */
 }
 .topbar > *{ pointer-events:auto; }
 
@@ -121,11 +123,12 @@ html, body{
   flex-shrink: 0;
 }
 .topbar__title h1{
-  color: #e8e6e1; /* მუდმივად ღია ტექსტი, რადგან ფონი სულ შავია */
+  color: #e8e6e1; 
   font-size: 17px;
   font-weight: 700;
   margin:0;
   letter-spacing: 0.2px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5); /* ტექსტს მცირე ჩრდილი დავადეთ უკეთესი კითხვადობისთვის */
 }
 .topbar__dot{
   width:10px; height:10px; border-radius:50%;
@@ -151,14 +154,15 @@ html, body{
 }
 .iconbtn:hover{ background: var(--chrome-btn-bg-hover); }
 
-/* უშუალოდ ჰედერის შიგნით არსებული ღილაკები მუდმივად მუქი თემის სტილით */
+/* ჰედერის ღილაკების გაუმჯობესებული სტილი */
 .topbar .iconbtn{
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.1); 
   color: #e8e6e1;
+  backdrop-filter: blur(8px); /* რუკის ფონი ოდნავ დაილურება ღილაკის უკან */
 }
 .topbar .iconbtn:hover{ 
-  background: rgba(255,255,255,0.12); 
+  background: rgba(255,255,255,0.18); 
 }
 
 /* ---------- Search ---------- */
