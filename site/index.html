@@ -109,7 +109,7 @@
         <h3 class="menuDrawer__sectionTitle">როგორ მუშაობს</h3>
         <p class="menuDrawer__text">
           დააწექი ნებისმიერ გაჩერებას რუკაზე და მონიშნე — არის თუ არა იქ კონტროლიორი.
-          ეს ინფორმაცია მაშინვე გამოჩნდება <strong>ყველასთვის</strong>, ვინც საიტზეა.
+          ეს ინფორმაცია <strong>მაშინვე</strong> გამოჩნდება ყველასთვის, ვინც საიტზეა.
           შეტყობინებები ანონიმურია და ავტომატურად წაიშლება 23:30 საათზე.
         </p>
       </div>
@@ -164,6 +164,29 @@
   </aside>
 
   <div class="toast" id="toast"></div>
+
+  <!-- Night mode overlay (00:00 – 07:00) -->
+  <div class="nightOverlay hidden" id="nightOverlay">
+    <div class="nightOverlay__content">
+      <div class="nightOverlay__moon">
+        <i data-lucide="moon"></i>
+      </div>
+      <h2 class="nightOverlay__title">ღამე მშვიდობისა</h2>
+      <p class="nightOverlay__message">
+        უკვე დაღამდა, რაც იმას ნიშნავს, რომ ავტობუსები აღარ დადიან.
+        შემოდი უკან <strong>დილის 7 საათზე</strong> და გააგრძელე
+        კონტროლიორების ადგილმდებარეობის ნახვა, ან თვითონ გვითხარი სად არის.
+      </p>
+      <div class="nightOverlay__time">
+        <i data-lucide="clock"></i>
+        <span>ვმუშაობთ 07:00 – 23:30</span>
+      </div>
+      <button class="nightOverlay__dismiss" id="nightClose">
+        <i data-lucide="map"></i>
+        რუკის ნახვა
+      </button>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
