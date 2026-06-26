@@ -63,8 +63,9 @@ html, body{
   font-family: 'Noto Sans Georgian', system-ui, sans-serif;
 }
 
-.leaflet-fade-anim .leaflet-tile{ transition: opacity 0.2s linear; }
-.leaflet-zoom-anim .leaflet-zoom-animated{ transition: transform 0.28s cubic-bezier(0.22, 0.86, 0.4, 1); }
+/* უფრო რბილი და გლუვი ზუმის ანიმაცია */
+.leaflet-fade-anim .leaflet-tile { transition: opacity 0.25s ease-in-out; }
+.leaflet-zoom-anim .leaflet-zoom-animated { transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1); }
 
 /* ბნელი რუკის CSS ფილტრი (მხოლოდ რუკის ფენაზე) */
 [data-theme="dark"] .leaflet-layer {
