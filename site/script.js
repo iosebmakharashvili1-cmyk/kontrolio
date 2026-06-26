@@ -97,7 +97,7 @@ async function fetchArrivals(ids) {
     const stopsArr = Array.isArray(data.stops) ? data.stops : [];
     const all = stopsArr.flatMap((raw) => extractArrivals(raw));
     all.sort((a, b) => a.etaMs - b.etaMs);
-    return all.slice(0, 4);
+    return all.slice(0, 5);
   } catch (err) {
     console.error("arrivals fetch failed:", err);
     return [];
