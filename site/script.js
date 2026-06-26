@@ -15,7 +15,7 @@
 const STOPS_BY_ID = {};
 STOPS.forEach((s) => (STOPS_BY_ID[s.id] = s));
 
-/* ---------- DATA LAYER ---------- */
+/* ---------- DATA LAYER (backend API) ---------- */
 const API_BASE = (() => {
   const { hostname, port } = window.location;
   if ((hostname === "localhost" || hostname === "127.0.0.1") && port !== "3000") {
@@ -64,7 +64,7 @@ async function fetchActivity() {
   }
 }
 
-/* ---------- მოსვლის დროები ---------- */
+/* ---------- მოსვლის დროები (TTC API, server-ის მეშვეობით) ---------- */
 function extractArrivals(rawResponse) {
   const list = Array.isArray(rawResponse) ? rawResponse : [];
   if (!list.length) return [];
@@ -142,7 +142,7 @@ function typeLabel(types) {
    ------------------------------------------------------------
    - ავტომატური: ღამით (00:00–07:00) dark, დანარჩენი light
    - ხელით toggle localStorage-ში ინახება
-   - ბნელი რუკა: CSS filter-ები OSM tiles-ზე
+   - ბნელი რუკა: CartoDB Dark Matter tiles
    ============================================================ */
 const THEME_KEY = "kontrolio-theme";
 const THEME_MANUAL_KEY = "kontrolio-theme-manual";
@@ -160,6 +160,13 @@ function getSavedTheme() {
 
 function setTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
+  if (theme === "dark") {
+    if (map.hasLayer(lightTiles)) map.removeLayer(lightTiles);
+    if (!map.hasLayer(darkTiles)) darkTiles.addTo(map);
+  } else {
+    if (map.hasLayer(darkTiles)) map.removeLayer(darkTiles);
+    if (!map.hasLayer(lightTiles)) lightTiles.addTo(map);
+  }
   updateThemeIcon(theme);
 }
 
@@ -192,11 +199,17 @@ const map = L.map("map", {
 
 L.control.zoom({ position: "bottomright" }).addTo(map);
 
-/* ---------- Tile layer (ერთი — OSM, ფილტრი CSS-ით) ---------- */
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+/* ---------- Tile layers ---------- */
+const lightTiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap contributors',
-}).addTo(map);
+});
+
+const darkTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: "abcd",
+});
 
 /* ---------- "ჩემი ლოკაცია" ---------- */
 let userLocationMarker = null;
@@ -689,5 +702,4 @@ setInterval(pollAndRender, 15 * 1000);
       if (sys !== current) setTheme(sys);
     }
   }, 60 * 1000);
-})();
 })();
