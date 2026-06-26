@@ -97,7 +97,7 @@ async function fetchArrivals(ids) {
     const stopsArr = Array.isArray(data.stops) ? data.stops : [];
     const all = stopsArr.flatMap((raw) => extractArrivals(raw));
     all.sort((a, b) => a.etaMs - b.etaMs);
-    return all.slice(0, 5);
+    return all.slice(0, 4);
   } catch (err) {
     console.error("arrivals fetch failed:", err);
     return [];
@@ -395,6 +395,10 @@ function setActionButtonsDisabled(disabled) {
 
 async function handleReportClick(status, successMsg) {
   if (!activeStopId) return;
+  if (isNightTime()) {
+    showToast("ღამის 00:00 – 07:00 შეტყობინება შეუძლებელია");
+    return;
+  }
   const stopId = activeStopId;
   const stop = STOPS_BY_ID[stopId];
   setActionButtonsDisabled(true);
@@ -421,7 +425,35 @@ btnClear.addEventListener("click", () => {
 sheetClose.addEventListener("click", closeSheet);
 overlay.addEventListener("click", closeSheet);
 
-/* ---------- Burger menu ---------- */
+/* ---------- Night mode (00:00 – 07:00) ---------- */
+function getTbilisiHour() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tbilisi",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  return parseInt(parts.find((p) => p.type === "hour").value) % 24;
+}
+
+function isNightTime() {
+  const h = getTbilisiHour();
+  return h >= 0 && h < 7;
+}
+
+const nightOverlay = document.getElementById("nightOverlay");
+const nightClose   = document.getElementById("nightClose");
+
+nightClose.addEventListener("click", () => {
+  nightOverlay.classList.add("hidden");
+});
+
+function checkNightMode() {
+  if (isNightTime()) {
+    nightOverlay.classList.remove("hidden");
+  }
+}
+
+
 const menuBtn = document.getElementById("menuBtn");
 const menuOverlay = document.getElementById("menuOverlay");
 const menuDrawer = document.getElementById("menuDrawer");
@@ -604,6 +636,7 @@ setInterval(pollAndRender, 15 * 1000);
 
 /* ---------- გაშვება ---------- */
 (async function init() {
+  checkNightMode();
   await refreshReportsFromServer();
   renderAllMarkers();
   lucide.createIcons();
