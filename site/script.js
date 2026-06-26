@@ -67,23 +67,23 @@ async function fetchActivity() {
 
 /* ---------- მოსვლის დროები (TTC API, server-ის მეშვეობით) ---------- */
 function extractArrivals(rawResponse) {
-  // TTC API returns a direct array of arrival objects
   const list = Array.isArray(rawResponse) ? rawResponse : [];
   if (!list.length) return [];
 
+  const now = Date.now();
   return list
     .map((item) => {
       const route = item.shortName != null ? String(item.shortName) : "?";
       const direction = item.headsign != null ? String(item.headsign) : "";
       const isRealtime = item.realtime === true;
-      // real-time წუთები სჯობია scheduled-ს
       const minutes = isRealtime
         ? item.realtimeArrivalMinutes
         : item.scheduledArrivalMinutes;
-      const etaMs = typeof minutes === "number" ? Date.now() + minutes * 60000 : null;
-      return { route, direction, etaMs, isRealtime };
+      if (typeof minutes !== "number") return null;
+      const etaMs = now + minutes * 60000;
+      return { route, direction, etaMs, isRealtime, minutes };
     })
-    .filter((a) => a.etaMs !== null && a.etaMs > Date.now()) // გასული ავტობუსები გამოვრიცხოთ
+    .filter((a) => a !== null && a.minutes >= 0) // 0 წთ ("ახლა") ჩავრთოთ, მხოლოდ გასულები გამოვრიცხოთ
     .sort((a, b) => a.etaMs - b.etaMs);
 }
 
@@ -97,7 +97,7 @@ async function fetchArrivals(ids) {
     const stopsArr = Array.isArray(data.stops) ? data.stops : [];
     const all = stopsArr.flatMap((raw) => extractArrivals(raw));
     all.sort((a, b) => a.etaMs - b.etaMs);
-    return all.slice(0, 5);
+    return all.slice(0, 4);
   } catch (err) {
     console.error("arrivals fetch failed:", err);
     return [];
