@@ -106,7 +106,8 @@ async function fetchArrivals(ids) {
 
 function formatEta(etaMs) {
   const minutes = Math.round((etaMs - Date.now()) / 60000);
-  if (minutes <= 0) return "ახლა";
+  if (minutes < 0) return "ახლა";
+  if (minutes === 0) return "0 წთ";
   if (minutes < 60) return `${minutes} წთ`;
   return clockTime(etaMs);
 }
