@@ -66,6 +66,14 @@ html, body{
 .leaflet-fade-anim .leaflet-tile{ transition: opacity 0.2s linear; }
 .leaflet-zoom-anim .leaflet-zoom-animated{ transition: transform 0.28s cubic-bezier(0.22, 0.86, 0.4, 1); }
 
+/* ---------- Dark mode map filter (dev.to approach) ---------- */
+[data-theme="dark"] .leaflet-layer,
+[data-theme="dark"] .leaflet-control-zoom-in,
+[data-theme="dark"] .leaflet-control-zoom-out,
+[data-theme="dark"] .leaflet-control-attribution {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
 /* ---------- Zoom control ---------- */
 .leaflet-control-zoom{
   border:none !important;
