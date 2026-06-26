@@ -183,11 +183,12 @@ const map = L.map("map", {
   zoomControl: false,
   attributionControl: true,
   maxZoom: 19,
-  zoomSnap: 0.1,
-  zoomDelta: 0.1,
-  wheelPxPerZoomLevel: 60,
-  wheelDebounceTime: 40,
-  easeLinearity: 0.2,
+  zoomSnap: 0,               // 0 რთავს იდეალურად გლუვ (fractional) ზუმს თაჩპედზე და სქროლზე
+  zoomDelta: 1,              // + და - ღილაკები სტანდარტულად 1 სრულ დონეს დააზუმებს (ბევრად ბუნებრივია)
+  wheelPxPerZoomLevel: 100,  // რამდენად სწრაფად დაზუმოს მაუსის ბორბალმა (რაც მეტია რიცხვი, მით უფრო რბილია)
+  zoomAnimation: true,
+  markerZoomAnimation: true,
+  fadeAnimation: true
 }).setView([41.7151, 44.8271], 12.5);
 
 L.control.zoom({ position: "bottomright" }).addTo(map);
