@@ -211,6 +211,8 @@ const TTC_HEADERS = {
   Origin: "https://transit.ttc.com.ge",
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Cookie": "cookiesession1=678A3E12D8A7C33A62974EF2C547EA69",
+  "X-api-key": "c0a2f304-551a-4d08-b8df-2c53ecd57f9f",
 };
 
 app.get("/api/arrivals", async (req, res) => {
@@ -230,7 +232,9 @@ app.get("/api/arrivals", async (req, res) => {
         { headers: TTC_HEADERS }
       ).then(async (r) => {
         if (!r.ok) throw new Error(`upstream ${r.status} for ${id}`);
-        return r.json();
+        const json = await r.json();
+        console.log(`[ttc-raw] stop ${id}:`, JSON.stringify(json).slice(0, 500));
+        return json;
       })
     )
   );
