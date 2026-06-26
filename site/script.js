@@ -16,7 +16,14 @@ const STOPS_BY_ID = {};
 STOPS.forEach((s) => (STOPS_BY_ID[s.id] = s));
 
 /* ---------- DATA LAYER (backend API) ---------- */
-const API_BASE = "/api";
+const API_BASE = (() => {
+  const { hostname, port } = window.location;
+  // Live Server (5500) ან სხვა dev სერვერი — Node-ს port 3000-ზე ვიძახებთ
+  if ((hostname === "localhost" || hostname === "127.0.0.1") && port !== "3000") {
+    return `http://${hostname}:3000/api`;
+  }
+  return "/api";
+})();
 let reportsCache = {};
 
 async function refreshReportsFromServer() {
@@ -58,57 +65,25 @@ async function fetchActivity() {
   }
 }
 
-/* ---------- მოსვლის დროები (TTC API, server-ის მეშვეობით) ----------
-   ეს ნაწილი არ არის 100%-ით დადასტურებული TTC-ის ნამდვილ JSON-ფორმატთან,
-   რადგან ტესტირება ჩემგან blocked იყო (datacenter IP). ამიტომ
-   extractArrivals() რამდენიმე გავრცელებულ ველის-სახელს ცდის და
-   რბილად ვარდება, თუ ფორმატი არ ემთხვევა — საჭიროების შემთხვევაში
-   მარტივად დასარეგულირებელია. */
-function pickField(obj, candidates) {
-  for (const key of candidates) {
-    if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
-  }
-  return null;
-}
-
+/* ---------- მოსვლის დროები (TTC API, server-ის მეშვეობით) ---------- */
 function extractArrivals(rawResponse) {
-  let list = null;
-  if (Array.isArray(rawResponse)) {
-    list = rawResponse;
-  } else if (rawResponse && typeof rawResponse === "object") {
-    const containerKeys = ["arrivals", "predictions", "stopTimes", "results", "data", "items"];
-    for (const key of containerKeys) {
-      if (Array.isArray(rawResponse[key])) {
-        list = rawResponse[key];
-        break;
-      }
-    }
-  }
-  if (!list) return [];
+  // TTC API returns a direct array of arrival objects
+  const list = Array.isArray(rawResponse) ? rawResponse : [];
+  if (!list.length) return [];
 
   return list
     .map((item) => {
-      const route = pickField(item, ["routeNumber", "routeShortName", "route", "routeNo", "number", "lineNumber"]);
-      const direction = pickField(item, ["headsign", "direction", "tripHeadsign", "destination", "directionName"]);
-      const isoTime = pickField(item, ["arrivalTime", "arrivalDateTime", "eta", "time", "scheduledTime"]);
-      const secondsField = pickField(item, ["secondsToArrival", "secondsLeft", "etaSeconds"]);
-      const minutesField = pickField(item, ["minutesToArrival", "minutes", "etaMinutes"]);
-
-      let etaMs = null;
-      if (typeof secondsField === "number") etaMs = Date.now() + secondsField * 1000;
-      else if (typeof minutesField === "number") etaMs = Date.now() + minutesField * 60000;
-      else if (typeof isoTime === "string") {
-        const parsed = Date.parse(isoTime);
-        if (!Number.isNaN(parsed)) etaMs = parsed;
-      }
-
-      return {
-        route: route !== null ? String(route) : "?",
-        direction: direction !== null ? String(direction) : "",
-        etaMs,
-      };
+      const route = item.shortName != null ? String(item.shortName) : "?";
+      const direction = item.headsign != null ? String(item.headsign) : "";
+      const isRealtime = item.realtime === true;
+      // real-time წუთები სჯობია scheduled-ს
+      const minutes = isRealtime
+        ? item.realtimeArrivalMinutes
+        : item.scheduledArrivalMinutes;
+      const etaMs = typeof minutes === "number" ? Date.now() + minutes * 60000 : null;
+      return { route, direction, etaMs, isRealtime };
     })
-    .filter((a) => a.etaMs !== null)
+    .filter((a) => a.etaMs !== null && a.etaMs > Date.now()) // გასული ავტობუსები გამოვრიცხოთ
     .sort((a, b) => a.etaMs - b.etaMs);
 }
 
@@ -122,7 +97,7 @@ async function fetchArrivals(ids) {
     const stopsArr = Array.isArray(data.stops) ? data.stops : [];
     const all = stopsArr.flatMap((raw) => extractArrivals(raw));
     all.sort((a, b) => a.etaMs - b.etaMs);
-    return all.slice(0, 3);
+    return all.slice(0, 5);
   } catch (err) {
     console.error("arrivals fetch failed:", err);
     return [];
@@ -334,16 +309,16 @@ let activeStopId = null;
 function renderStatusBanner(report) {
   if (!report) {
     sheetStatusBanner.className = "statusBanner statusBanner--unknown";
-    sheetStatusBanner.textContent = "⚪ სტატუსი უცნობია";
+    sheetStatusBanner.innerHTML = '<span class="statusDot statusDot--unknown"></span> სტატუსი უცნობია';
     sheetCaption.textContent = "ჯერ არავის შეუტყობინებია";
     return;
   }
   if (report.status === "inspector") {
     sheetStatusBanner.className = "statusBanner statusBanner--inspector";
-    sheetStatusBanner.textContent = "🔴 კონტროლიორი დგას";
+    sheetStatusBanner.innerHTML = '<span class="statusDot statusDot--inspector"></span> კონტროლიორი დგას';
   } else {
     sheetStatusBanner.className = "statusBanner statusBanner--clear";
-    sheetStatusBanner.textContent = "🟢 თავისუფალია";
+    sheetStatusBanner.innerHTML = '<span class="statusDot statusDot--clear"></span> თავისუფალია';
   }
   sheetCaption.textContent = `ბოლო შეტყობინება: ${timeAgo(report.ts)}`;
 }
@@ -370,11 +345,14 @@ function renderArrivalsList(arrivals, stop) {
     .map((a) => {
       const isMinibus = (stop.routesMinibus || []).includes(a.route);
       const chipClass = isMinibus ? "routeChip--minibus" : "routeChip--bus";
+      const realtimeBadge = a.isRealtime
+        ? `<span class="arrivalItem__realtime" title="რეალური დრო">●</span>`
+        : `<span class="arrivalItem__scheduled" title="განრიგით">○</span>`;
       return `
       <div class="arrivalItem">
         <span class="routeChip ${chipClass}">${a.route}</span>
         <span class="arrivalItem__direction">${a.direction || "—"}</span>
-        <span class="arrivalItem__time">${formatEta(a.etaMs)}</span>
+        <span class="arrivalItem__time">${realtimeBadge}${formatEta(a.etaMs)}</span>
       </div>`;
     })
     .join("");
@@ -432,32 +410,39 @@ async function handleReportClick(status, successMsg) {
 }
 
 btnInspector.addEventListener("click", () => {
-  handleReportClick("inspector", "მადლობა! მონიშნულია — კონტროლიორი დგას 🔴");
+  handleReportClick("inspector", "მადლობა! კონტროლიორი მონიშნულია");
 });
 
 btnClear.addEventListener("click", () => {
-  handleReportClick("clear", "მადლობა! მონიშნულია — თავისუფალია 🟢");
+  handleReportClick("clear", "მადლობა! თავისუფალი მონიშნულია");
 });
 
 sheetClose.addEventListener("click", closeSheet);
 overlay.addEventListener("click", closeSheet);
 
-/* ---------- About sheet ---------- */
-const aboutBtn = document.getElementById("aboutBtn");
-const aboutOverlay = document.getElementById("aboutOverlay");
-const aboutSheet = document.getElementById("aboutSheet");
-const aboutClose = document.getElementById("aboutClose");
+/* ---------- Burger menu ---------- */
+const menuBtn = document.getElementById("menuBtn");
+const menuOverlay = document.getElementById("menuOverlay");
+const menuDrawer = document.getElementById("menuDrawer");
+const menuClose = document.getElementById("menuClose");
 
-aboutBtn.addEventListener("click", () => {
-  aboutOverlay.classList.remove("hidden");
-  aboutSheet.classList.remove("hidden");
-});
-function closeAbout() {
-  aboutOverlay.classList.add("hidden");
-  aboutSheet.classList.add("hidden");
+function openMenu() {
+  menuOverlay.classList.remove("hidden");
+  menuDrawer.classList.remove("hidden");
 }
-aboutClose.addEventListener("click", closeAbout);
-aboutOverlay.addEventListener("click", closeAbout);
+function closeMenu() {
+  menuOverlay.classList.add("hidden");
+  menuDrawer.classList.add("hidden");
+}
+menuBtn.addEventListener("click", openMenu);
+menuClose.addEventListener("click", closeMenu);
+menuOverlay.addEventListener("click", closeMenu);
+
+/* ---------- Activity toggle (mobile) ---------- */
+const activityBtn = document.getElementById("activityBtn");
+activityBtn.addEventListener("click", () => {
+  activityPanel.classList.toggle("show");
+});
 
 /* ---------- Activity feed ----------
    მუდმივად ჩატანილი პანელია — დესკტოპზე sidebar, მუდმივად ღია;
@@ -506,7 +491,9 @@ async function loadAndRenderActivity() {
 }
 
 activityHeader.addEventListener("click", () => {
-  activityPanel.classList.toggle("expanded");
+  if (window.innerWidth < 768) {
+    activityPanel.classList.toggle("show");
+  }
 });
 
 loadAndRenderActivity();
@@ -618,4 +605,5 @@ setInterval(pollAndRender, 15 * 1000);
 (async function init() {
   await refreshReportsFromServer();
   renderAllMarkers();
+  lucide.createIcons();
 })();
