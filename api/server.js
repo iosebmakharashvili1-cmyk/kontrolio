@@ -17,11 +17,9 @@
    GET  /api/health    -> { ok: true }
    ============================================================ */
 
-
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
-const rateLimit = require("express-rate-limit");
 
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "store.json");
@@ -55,9 +53,11 @@ function persistStore() {
 
 loadStore();
 
-/* ---------- "სერვის დღის" გასაანგარიშებელი ლოგიკა ---------- */
-const CUTOFF_HOUR = 00;
-const CUTOFF_MINUTE = 00;
+/* ---------- "სერვის დღის" გასაანგარიშებელი ლოგიკა ----------
+   ნაცვლად ჩვეული კალენდარული თარიღისა (რომელიც 00:00-ზე იცვლება),
+   ჩვენი "დღე" იცვლება 23:30-ზე. */
+const CUTOFF_HOUR = 23;
+const CUTOFF_MINUTE = 30;
 
 function tbilisiParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -137,23 +137,15 @@ function scheduleCleanup() {
 
 /* ---------- Express app ---------- */
 const app = express();
-app.set('trust proxy', 1);
 app.use(express.json());
 
-// CORS დაცვა
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://kontrolio.hsonlab.xyz");
+  res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type");
   res.header("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
-});
-
-// Rate Limiting
-const reportLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, max: 10,
-  message: { error: "ზედმეტად ბევრი რეპორტი." }
 });
 
 const VALID_STATUSES = new Set(["inspector", "clear"]);
@@ -162,33 +154,49 @@ app.get("/api/reports", (req, res) => {
   const current = serviceDayKey();
   const out = {};
   for (const [stopId, rec] of Object.entries(store.reports)) {
-    if (rec.reportDate === current) out[stopId] = { status: rec.status, ts: rec.ts };
+    if (rec.reportDate === current) {
+      out[stopId] = { status: rec.status, ts: rec.ts };
+    }
   }
   res.json(out);
 });
 
-app.post("/api/reports", reportLimiter, async (req, res) => {
+app.post("/api/reports", (req, res) => {
   const { stopId, status, stopName } = req.body || {};
-  if (typeof stopId !== "string" || !stopId.trim() || !VALID_STATUSES.has(status)) {
-    return res.status(400).json({ error: "Invalid data" });
+
+  if (typeof stopId !== "string" || !stopId.trim()) {
+    return res.status(400).json({ error: "stopId is required" });
+  }
+  if (!VALID_STATUSES.has(status)) {
+    return res.status(400).json({ error: 'status must be "inspector" or "clear"' });
   }
 
   const ts = Date.now();
   const reportDate = serviceDayKey();
-  const safeName = (typeof stopName === "string" && stopName.trim()) ? stopName.trim().slice(0, 120) : "გაჩერება";
+  const safeName =
+    typeof stopName === "string" && stopName.trim()
+      ? stopName.trim().slice(0, 120)
+      : "გაჩერება";
 
   store.reports[stopId] = { status, ts, reportDate };
-  store.activity.push({ stopName: safeName, status, ts, reportDate });
-  if (store.activity.length > MAX_ACTIVITY_ENTRIES) store.activity = store.activity.slice(-MAX_ACTIVITY_ENTRIES);
 
-  await persistStore();
+  store.activity.push({ stopName: safeName, status, ts, reportDate });
+  if (store.activity.length > MAX_ACTIVITY_ENTRIES) {
+    store.activity = store.activity.slice(-MAX_ACTIVITY_ENTRIES);
+  }
+
+  persistStore();
   res.json({ stopId, status, ts });
 });
 
 app.get("/api/activity", (req, res) => {
   const current = serviceDayKey();
-  res.json(store.activity.filter(a => a.reportDate === current).slice(-100).reverse());
+  const todays = store.activity.filter((a) => a.reportDate === current);
+  const recent = todays.slice(-100).reverse(); // უახლესი წინ
+  res.json(recent.map((a) => ({ stopName: a.stopName, status: a.status, ts: a.ts })));
 });
+
+app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 /* ---------- მოსვლის დროების proxy (TTC API) ----------
    ბრაუზერიდან პირდაპირ ამ API-ზე წვდომა CORS-ის გამო ვერ
@@ -203,8 +211,6 @@ const TTC_HEADERS = {
   Origin: "https://transit.ttc.com.ge",
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  "Cookie": "cookiesession1=678A3E12D8A7C33A62974EF2C547EA69",
-  "X-api-key": "c0a2f304-551a-4d08-b8df-2c53ecd57f9f",
 };
 
 app.get("/api/arrivals", async (req, res) => {
@@ -224,9 +230,7 @@ app.get("/api/arrivals", async (req, res) => {
         { headers: TTC_HEADERS }
       ).then(async (r) => {
         if (!r.ok) throw new Error(`upstream ${r.status} for ${id}`);
-        const json = await r.json();
-        console.log(`[ttc-raw] stop ${id}:`, JSON.stringify(json).slice(0, 500));
-        return json;
+        return r.json();
       })
     )
   );
