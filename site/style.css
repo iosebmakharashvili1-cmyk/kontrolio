@@ -103,10 +103,13 @@ html, body{
 /* ---------- Top bar ---------- */
 .topbar{
   position:absolute; top:0; left:0; right:0; z-index:500;
-  display:flex; align-items:center; justify-content:space-between;
-  padding: 14px 16px;
-  background: linear-gradient(180deg, var(--chrome-grad-start), var(--chrome-grad-end));
+  display:flex; 
+  align-items:flex-start; /* იცვლება center-დან, რომ ღილაკები ზემოთ დარჩეს */
+  justify-content:space-between;
+  padding: 14px 16px 72px 16px; /* 72px ქვედა ფედინგი ფარავს ძებნის ველს */
+  background: #0f1115; /* მუდმივად შავი/მუქი ფონი ორივე თემისთვის */
   pointer-events:none;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.4); /* ჰედერის ჩრდილი რუკაზე */
 }
 .topbar > *{ pointer-events:auto; }
 
@@ -118,7 +121,7 @@ html, body{
   flex-shrink: 0;
 }
 .topbar__title h1{
-  color: var(--chrome-text);
+  color: #e8e6e1; /* მუდმივად ღია ტექსტი, რადგან ფონი სულ შავია */
   font-size: 17px;
   font-weight: 700;
   margin:0;
@@ -147,6 +150,16 @@ html, body{
   transition: background-color 0.15s ease;
 }
 .iconbtn:hover{ background: var(--chrome-btn-bg-hover); }
+
+/* უშუალოდ ჰედერის შიგნით არსებული ღილაკები მუდმივად მუქი თემის სტილით */
+.topbar .iconbtn{
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #e8e6e1;
+}
+.topbar .iconbtn:hover{ 
+  background: rgba(255,255,255,0.12); 
+}
 
 /* ---------- Search ---------- */
 .searchWrap{
