@@ -623,8 +623,17 @@ html, body{
   position:absolute; inset:0; z-index:1000;
   background: rgba(10,12,20,0.45);
   backdrop-filter: blur(2px);
+  
+  /* ახალი ანიმაცია ფონისთვის */
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
-.menuOverlay.hidden{ display:none; }
+.menuOverlay.hidden{
+  opacity: 0;
+  visibility: hidden;
+  display: block; /* ვაუქმებთ ძველ display: none-ს */
+}
 
 .menuDrawer{
   position:absolute; top:0; left:0; bottom:0;
@@ -633,15 +642,23 @@ html, body{
   background: var(--surface);
   display:flex; flex-direction:column;
   box-shadow: 4px 0 30px rgba(0,0,0,0.25);
-  animation: slideInLeft 0.22s ease-out;
   overflow: hidden;
+  
+  /* ახალი გლუვი ანიმაცია მენიუსთვის */
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.35s;
 }
-.menuDrawer.hidden{ display:none; }
+.menuDrawer.hidden{
+  transform: translateX(-100%);
+  visibility: hidden;
+  display: flex; /* ვაუქმებთ ძველ display: none-ს */
+}
 
-@keyframes slideInLeft{
-  from{ transform: translateX(-100%); }
-  to{ transform: translateX(0); }
-}
+/* 
+   შენიშვნა: @keyframes slideInLeft მთლიანად წავშალეთ, 
+   რადგან ახლა transition იღებს საკუთარ თავზე გახსნა/დახურვის ანიმაციას. 
+*/
 
 .menuDrawer__header{
   display:flex; align-items:center; justify-content:space-between;
