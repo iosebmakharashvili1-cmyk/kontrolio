@@ -7,7 +7,7 @@
   --green-soft: #d4f3ef;
   --grey: #8a8f9c;
   --grey-soft: #e7e7ea;
-  --ring: #f4f3ee; /* მარკერების/კლასტერების მუდმივი ღია რგოლი */
+  --ring: #f4f3ee;
   --user-loc: #8b5cf6;
   --shadow: 0 12px 30px rgba(20,25,43,0.25);
   --radius: 18px;
@@ -24,6 +24,22 @@
   --chrome-btn-border: rgba(20,25,43,0.16);
 
   font-family: 'Noto Sans Georgian', system-ui, sans-serif;
+}
+
+[data-theme="dark"]{
+  --page-bg: #0f1115;
+  --surface: #1a1d24;
+  --text: #e8e6e1;
+  --chrome-bg-solid: rgba(26,29,36,0.92);
+  --chrome-grad-start: rgba(26,29,36,0.92);
+  --chrome-grad-end: rgba(26,29,36,0);
+  --chrome-text: #e8e6e1;
+  --chrome-btn-bg: rgba(255,255,255,0.06);
+  --chrome-btn-bg-hover: rgba(255,255,255,0.12);
+  --chrome-btn-border: rgba(255,255,255,0.16);
+  --shadow: 0 12px 30px rgba(0,0,0,0.45);
+  --grey-soft: #2a2d35;
+  --ring: #1a1d24;
 }
 
 *{ box-sizing: border-box; }
@@ -43,16 +59,22 @@ html, body{
 }
 
 .leaflet-container{
-  background: #14192b; /* შეცვლილი ფონი ბნელი რუკისთვის */
+  background: var(--page-bg);
   font-family: 'Noto Sans Georgian', system-ui, sans-serif;
 }
 
-/* Leaflet-ის ჩაშენებული zoom-ანიმაცია უკვე ცდილობს სიგლუვეს —
-   ამ ცვლადებს მხოლოდ მცირედ ვამარტივებთ უფრო "rubber" შეგრძნებისთვის. */
 .leaflet-fade-anim .leaflet-tile{ transition: opacity 0.2s linear; }
 .leaflet-zoom-anim .leaflet-zoom-animated{ transition: transform 0.28s cubic-bezier(0.22, 0.86, 0.4, 1); }
 
-/* ---------- Slick zoom-control ---------- */
+/* ---------- Dark mode map filter (dev.to approach) ---------- */
+[data-theme="dark"] .leaflet-layer,
+[data-theme="dark"] .leaflet-control-zoom-in,
+[data-theme="dark"] .leaflet-control-zoom-out,
+[data-theme="dark"] .leaflet-control-attribution {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
+/* ---------- Zoom control ---------- */
 .leaflet-control-zoom{
   border:none !important;
   border-radius: 14px !important;
@@ -185,11 +207,7 @@ html, body{
 .legend__dot--clear{ background: var(--green); }
 .legend__dot--unknown{ background: var(--bus-blue); }
 
-/* ---------- Custom markers ----------
-   სტატუსის მიხედვით მთლიანი ფონი იცვლება ფერს (და არა მხოლოდ
-   რგოლი) — ლურჯი = უცნობი, წითელი = კონტროლიორი, მწვანე = თავისუფალია.
-   რგოლი (--ring) მუდმივი ღია ფერია, რომ კონტრასტი რუკაზე
-   ყოველთვის შენარჩუნდეს. */
+/* ---------- Custom markers ---------- */
 .stopMarker{
   width: 30px; height:30px;
   border-radius:50%;
@@ -236,7 +254,7 @@ html, body{
   animation: pulseMarker 1.6s infinite;
 }
 
-/* ---------- "ჩემი ლოკაცია" ღილაკი (Leaflet custom control) ---------- */
+/* ---------- Locate button ---------- */
 .locateBtn{
   width:40px; height:40px; border-radius:50%;
   background: var(--surface); color: var(--text);
@@ -310,7 +328,7 @@ html, body{
   color: var(--grey);
 }
 
-/* ---------- სტატუსის ბანერი (გაჩერების დეტალებში) ---------- */
+/* ---------- Status banner ---------- */
 .statusBanner{
   display:flex; align-items:center; gap:8px;
   padding: 10px 14px;
@@ -322,7 +340,7 @@ html, body{
 .statusBanner--clear{ background: var(--green-soft); color: #14685f; }
 .statusBanner--inspector{ background: var(--red-soft); color: #8a1f17; }
 
-/* ---------- მარშრუტების chip-ები ---------- */
+/* ---------- Route chips ---------- */
 .routeChips{
   display:flex; flex-wrap:wrap; gap:6px;
   margin-bottom: 16px;
@@ -343,7 +361,7 @@ html, body{
   font-weight:500;
 }
 
-/* ---------- მოსვლის დროები ---------- */
+/* ---------- Arrivals ---------- */
 .arrivalsSection h3{
   margin: 0 0 8px;
   font-size: 13px;
@@ -436,14 +454,7 @@ html, body{
   flex-shrink:0;
 }
 
-.aboutText{
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--text);
-  margin: 0 0 18px;
-}
-
-/* ---------- Night overlay (00:00 – 07:00) ---------- */
+/* ---------- Night overlay ---------- */
 .nightOverlay{
   position:absolute; inset:0; z-index:2000;
   background: linear-gradient(160deg, #07091a 0%, #0d1230 55%, #110820 100%);
@@ -452,7 +463,6 @@ html, body{
 }
 .nightOverlay.hidden{ display:none; }
 
-/* Stars */
 .nightOverlay::before{
   content:"";
   position:absolute; inset:0;
@@ -555,6 +565,7 @@ html, body{
 .nightOverlay__dismiss:hover{ background:rgba(255,255,255,0.18); }
 .nightOverlay__dismiss:active{ transform:scale(0.97); }
 .nightOverlay__dismiss [data-lucide]{ width:15px; height:15px; }
+
 [data-lucide]{
   display: inline-block;
   width: 18px; height: 18px;
@@ -580,7 +591,7 @@ html, body{
 }
 .searchInput{ padding-left: 40px; }
 
-/* ---------- Status dots (banner + buttons) ---------- */
+/* ---------- Status dots ---------- */
 .statusDot{
   display: inline-block;
   width: 10px; height: 10px;
@@ -600,7 +611,7 @@ html, body{
 .reportBtn__dot--inspector{ background: var(--red); }
 .reportBtn__dot--clear{ background: var(--green); }
 
-/* ---------- Menu drawer section icon (Lucide-sized) ---------- */
+/* ---------- Menu ---------- */
 .menuOverlay{
   position:absolute; inset:0; z-index:1000;
   background: rgba(10,12,20,0.45);
@@ -695,13 +706,10 @@ html, body{
 .menuDrawer__link [data-lucide]{ width:13px; height:13px; }
 .menuDrawer__link:hover{ background: var(--chrome-btn-bg-hover); }
 
-/* ---------- Activity toggle button (mobile-only) ---------- */
+/* ---------- Activity toggle ---------- */
 .activityToggleBtn{ display:none; }
 
-/* ---------- Activity panel ----------
-   დესკტოპზე: მუდმივი sidebar მარჯვნივ, რუკა მის გვერდით იკუმშება.
-   მობილურზე: ქვედა drawer, default-ად "peek" (დახურული) მდგომარეობაში,
-   header-ზე დაწკაპუნებით იხსნება/იხურება. */
+/* ---------- Activity panel ---------- */
 .activityPanel{
   position:absolute; z-index: 700;
   background: var(--surface);
@@ -769,7 +777,7 @@ html, body{
   padding: 20px 0;
 }
 
-/* დესკტოპი/ტაბლეტი: მუდმივად ღია sidebar */
+/* Desktop */
 @media (min-width: 768px){
   .activityPanel{
     top:0; right:0; bottom:0; left:auto;
@@ -782,7 +790,7 @@ html, body{
   .topbar{ right: 340px; }
 }
 
-/* მობილური: ქვედა drawer, ღილაკით გასახსნელი */
+/* Mobile */
 @media (max-width: 767px){
   .activityToggleBtn{ display:flex; align-items:center; justify-content:center; }
 
@@ -806,7 +814,7 @@ html, body{
   }
 }
 
-/* ---------- Toast (მუდმივად მუქი — snackbar-ის ჩვეული სტილი) ---------- */
+/* ---------- Toast ---------- */
 .toast{
   position:absolute; top:70px; left:50%; z-index:1000;
   transform: translate(-50%, -20px);
