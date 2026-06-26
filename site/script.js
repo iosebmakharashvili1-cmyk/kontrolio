@@ -15,10 +15,9 @@
 const STOPS_BY_ID = {};
 STOPS.forEach((s) => (STOPS_BY_ID[s.id] = s));
 
-/* ---------- DATA LAYER (backend API) ---------- */
+/* ---------- DATA LAYER ---------- */
 const API_BASE = (() => {
   const { hostname, port } = window.location;
-  // Live Server (5500) ან სხვა dev სერვერი — Node-ს port 3000-ზე ვიძახებთ
   if ((hostname === "localhost" || hostname === "127.0.0.1") && port !== "3000") {
     return `http://${hostname}:3000/api`;
   }
@@ -65,11 +64,10 @@ async function fetchActivity() {
   }
 }
 
-/* ---------- მოსვლის დროები (TTC API, server-ის მეშვეობით) ---------- */
+/* ---------- მოსვლის დროები ---------- */
 function extractArrivals(rawResponse) {
   const list = Array.isArray(rawResponse) ? rawResponse : [];
   if (!list.length) return [];
-
   const now = Date.now();
   return list
     .map((item) => {
@@ -83,7 +81,7 @@ function extractArrivals(rawResponse) {
       const etaMs = now + minutes * 60000;
       return { route, direction, etaMs, isRealtime, minutes };
     })
-    .filter((a) => a !== null && a.minutes >= 0) // 0 წთ ("ახლა") ჩავრთოთ, მხოლოდ გასულები გამოვრიცხოთ
+    .filter((a) => a !== null && a.minutes >= 0)
     .sort((a, b) => a.etaMs - b.etaMs);
 }
 
@@ -139,18 +137,65 @@ function typeLabel(types) {
   return "ავტობუსი";
 }
 
+/* ============================================================
+   THEME SYSTEM
+   ------------------------------------------------------------
+   - ავტომატური: ღამით (00:00–07:00) dark, დანარჩენი light
+   - ხელით toggle localStorage-ში ინახება
+   - ბნელი რუკა: CSS filter-ები OSM tiles-ზე
+   ============================================================ */
+const THEME_KEY = "kontrolio-theme";
+const THEME_MANUAL_KEY = "kontrolio-theme-manual";
+
+function getSystemTheme() {
+  return isNightTime() ? "dark" : "light";
+}
+
+function getSavedTheme() {
+  if (localStorage.getItem(THEME_MANUAL_KEY) === "true") {
+    return localStorage.getItem(THEME_KEY) || "light";
+  }
+  return getSystemTheme();
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  updateThemeIcon(theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "light";
+  const next = current === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, next);
+  localStorage.setItem(THEME_MANUAL_KEY, "true");
+  setTheme(next);
+}
+
+function updateThemeIcon(theme) {
+  const icon = document.getElementById("themeIcon");
+  if (!icon) return;
+  icon.setAttribute("data-lucide", theme === "dark" ? "moon" : "sun");
+  if (window.lucide) lucide.createIcons();
+}
+
 /* ---------- რუკის ინიციალიზაცია ---------- */
 const map = L.map("map", {
   zoomControl: false,
   attributionControl: true,
   maxZoom: 19,
-  zoomSnap: 0.5,
-  zoomDelta: 0.5,
-  wheelPxPerZoomLevel: 90,
+  zoomSnap: 0.1,
+  zoomDelta: 0.1,
+  wheelPxPerZoomLevel: 60,
+  wheelDebounceTime: 40,
   easeLinearity: 0.2,
 }).setView([41.7151, 44.8271], 12.5);
 
 L.control.zoom({ position: "bottomright" }).addTo(map);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors',
+}).addTo(map);
 
 /* ---------- "ჩემი ლოკაცია" ---------- */
 let userLocationMarker = null;
@@ -208,16 +253,7 @@ const LocateControl = L.Control.extend({
 });
 map.addControl(new LocateControl());
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  maxZoom: 19,
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd'
-}).addTo(map);
-
-/* 2000+ გაჩერებაა — ცალ-ცალკე მარკერების ნაცვლად, ვაჯგუფებთ
-   კლასტერებად. კლასტერის ფერი აჯამებს მის შიგნით არსებულ
-   სტატუსებს: წითელი, თუ შიგნით კონტროლიორია; მწვანე, თუ
-   ყველაზე "ცხელი" სტატუსი თავისუფალია; სხვა შემთხვევაში ლურჯი. */
+/* ---------- კლასტერები ---------- */
 const clusterGroup = L.markerClusterGroup({
   maxClusterRadius: 55,
   disableClusteringAtZoom: 17,
@@ -239,8 +275,8 @@ const clusterGroup = L.markerClusterGroup({
 });
 map.addLayer(clusterGroup);
 
-/* ---------- მარკერების შექმნა/განახლება ---------- */
-const markers = {}; // stopId -> L.marker
+/* ---------- მარკერები ---------- */
+const markers = {};
 
 const BUS_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/>
@@ -294,7 +330,7 @@ function refreshMarker(stopId) {
   }
 }
 
-/* ---------- Bottom sheet (გაჩერების შეტყობინება) ---------- */
+/* ---------- Bottom sheet ---------- */
 const overlay = document.getElementById("overlay");
 const sheet = document.getElementById("sheet");
 const sheetStopName = document.getElementById("sheetStopName");
@@ -369,7 +405,6 @@ async function loadArrivalsForStop(stopId, stop) {
 function renderSheetInfo(stopId) {
   const stop = STOPS_BY_ID[stopId];
   const report = getReport(stopId);
-
   sheetStopName.textContent = stop.name;
   renderStatusBanner(report);
   renderRouteChips(stop);
@@ -454,7 +489,7 @@ function checkNightMode() {
   }
 }
 
-
+/* ---------- Menu ---------- */
 const menuBtn = document.getElementById("menuBtn");
 const menuOverlay = document.getElementById("menuOverlay");
 const menuDrawer = document.getElementById("menuDrawer");
@@ -472,17 +507,19 @@ menuBtn.addEventListener("click", openMenu);
 menuClose.addEventListener("click", closeMenu);
 menuOverlay.addEventListener("click", closeMenu);
 
+/* ---------- Theme toggle ---------- */
+const themeBtn = document.getElementById("themeBtn");
+if (themeBtn) {
+  themeBtn.addEventListener("click", toggleTheme);
+}
+
 /* ---------- Activity toggle (mobile) ---------- */
 const activityBtn = document.getElementById("activityBtn");
 activityBtn.addEventListener("click", () => {
   activityPanel.classList.toggle("show");
 });
 
-/* ---------- Activity feed ----------
-   მუდმივად ჩატანილი პანელია — დესკტოპზე sidebar, მუდმივად ღია;
-   მობილურზე ქვედა drawer, header-ზე tap-ით იხსნება/იხურება.
-   Poll-ი მუდმივად მუშაობს ფონში, ღია/დახურული რეჟიმის
-   მიუხედავად. */
+/* ---------- Activity feed ---------- */
 const activityPanel = document.getElementById("activityPanel");
 const activityHeader = document.getElementById("activityHeader");
 const activityPeek = document.getElementById("activityPeek");
@@ -621,10 +658,7 @@ searchInput.addEventListener("keydown", (e) => {
   }
 });
 
-/* ---------- პერიოდული სინქრონიზაცია სერვერთან ----------
-   სხვისი შეტყობინებები ავტომატურად გამოჩნდება ყველას რუკაზე,
-   ყოველ 15 წამში ერთხელ poll-ის წყალობით. დღის გასუფთავებას
-   (23:30-ზე) სერვერი თავად ამუშავებს. */
+/* ---------- პერიოდული სინქრონიზაცია სერვერთან ---------- */
 async function pollAndRender() {
   const ok = await refreshReportsFromServer();
   if (ok) {
@@ -640,5 +674,19 @@ setInterval(pollAndRender, 15 * 1000);
   checkNightMode();
   await refreshReportsFromServer();
   renderAllMarkers();
+
+  const initialTheme = getSavedTheme();
+  setTheme(initialTheme);
+
+  lucide.createIcons();
+
+  setInterval(() => {
+    if (localStorage.getItem(THEME_MANUAL_KEY) !== "true") {
+      const sys = getSystemTheme();
+      const current = document.documentElement.getAttribute("data-theme") || "light";
+      if (sys !== current) setTheme(sys);
+    }
+  }, 60 * 1000);
+})();
   lucide.createIcons();
 })();
