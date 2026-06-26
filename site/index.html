@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Kontrolio</title>
+<title>კონტროლიორების რუკა</title>
 
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -17,25 +17,28 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
 <link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 
   <header class="topbar">
     <div class="topbar__title">
+      <button id="menuBtn" class="iconbtn menuBtn" aria-label="მენიუ" title="მენიუ"><i data-lucide="menu"></i></button>
       <span class="topbar__dot"></span>
       <h1>სად არის კონტროლიორი?</h1>
     </div>
     <div class="topbar__actions">
-      <button id="aboutBtn" class="iconbtn" title="ინფორმაცია" aria-label="ინფორმაცია">?</button>
+      <button id="activityBtn" class="iconbtn activityToggleBtn" title="აქტივობა" aria-label="აქტივობა"><i data-lucide="bell"></i></button>
     </div>
   </header>
 
   <div class="searchWrap">
+    <i data-lucide="search" class="searchIcon"></i>
     <input
       type="text"
       id="searchInput"
       class="searchInput"
-      placeholder="🔍  მოძებნე გაჩერება..."
+      placeholder="მოძებნე გაჩერება..."
       autocomplete="off"
     />
     <div class="searchResults" id="searchResults"></div>
@@ -64,7 +67,7 @@
     <div class="sheet__handle"></div>
     <h2 id="sheetStopName">გაჩერება</h2>
 
-    <div class="statusBanner" id="sheetStatusBanner">⚪ სტატუსი უცნობია</div>
+    <div class="statusBanner" id="sheetStatusBanner"><span class="statusDot statusDot--unknown"></span> სტატუსი უცნობია</div>
     <p class="sheet__caption" id="sheetCaption"></p>
 
     <div class="routeChips" id="sheetRouteChips"></div>
@@ -78,34 +81,81 @@
 
     <div class="sheet__actions">
       <button class="reportBtn reportBtn--inspector" id="btnInspector">
-        🔴&nbsp; კონტროლიორი დგას
+        <span class="reportBtn__dot reportBtn__dot--inspector"></span>კონტროლიორი დგას
       </button>
       <button class="reportBtn reportBtn--clear" id="btnClear">
-        🟢&nbsp; არავინაა
+        <span class="reportBtn__dot reportBtn__dot--clear"></span>არავინაა
       </button>
     </div>
 
     <button class="sheet__close" id="sheetClose">დახურვა</button>
   </div>
 
-  <!-- About / info modal -->
-  <div class="overlay hidden" id="aboutOverlay"></div>
-  <div class="sheet hidden" id="aboutSheet">
-    <div class="sheet__handle"></div>
-    <h2>როგორ მუშაობს</h2>
-    <p class="aboutText">
-      დააწექი ნებისმიერ გაჩერებას რუკაზე და მონიშნე, არის თუ არა იქ კონტროლიორი —
-      ეს ინფორმაცია მაშინვე გამოუჩნდება <strong>ყველას</strong>, ვინც საიტზეა. მონაცემები ავტომატურად წაიშლება
-      23:30 საათზე, როცა ავტობუსების მოძრაობა წყდება.
-    </p>
-    <button class="sheet__close" id="aboutClose">გასაგებია</button>
+  <!-- Burger menu -->
+  <div class="menuOverlay hidden" id="menuOverlay"></div>
+  <div class="menuDrawer hidden" id="menuDrawer">
+    <div class="menuDrawer__header">
+      <div class="menuDrawer__brand">
+        <span class="topbar__dot" style="width:12px;height:12px;flex-shrink:0;"></span>
+        <span class="menuDrawer__brandName">სად არის კონტროლიორი?</span>
+      </div>
+      <button class="iconbtn" id="menuClose" aria-label="დახურვა"><i data-lucide="x"></i></button>
+    </div>
+
+    <div class="menuDrawer__body">
+
+      <div class="menuDrawer__section">
+        <div class="menuDrawer__sectionIcon"><i data-lucide="bus"></i></div>
+        <h3 class="menuDrawer__sectionTitle">როგორ მუშაობს</h3>
+        <p class="menuDrawer__text">
+          დააწექი ნებისმიერ გაჩერებას რუკაზე და მონიშნე — არის თუ არა იქ კონტროლიორი.
+          ეს ინფორმაცია მაშინვე გამოჩნდება <strong>ყველასთვის</strong>, ვინც საიტზეა.
+          შეტყობინებები ანონიმურია და ავტომატურად წაიშლება 23:30 საათზე.
+        </p>
+      </div>
+
+      <div class="menuDrawer__divider"></div>
+
+      <div class="menuDrawer__section">
+        <div class="menuDrawer__sectionIcon"><i data-lucide="user"></i></div>
+        <h3 class="menuDrawer__sectionTitle">ავტორი</h3>
+        <p class="menuDrawer__text">[შენი სახელი / მოკლე ინფო]</p>
+        <div class="menuDrawer__links">
+          <a href="#" class="menuDrawer__link"><i data-lucide="github"></i> GitHub</a>
+          <a href="mailto:" class="menuDrawer__link"><i data-lucide="mail"></i> კონტაქტი</a>
+        </div>
+      </div>
+
+      <div class="menuDrawer__divider"></div>
+
+      <div class="menuDrawer__section">
+        <div class="menuDrawer__sectionIcon"><i data-lucide="database"></i></div>
+        <h3 class="menuDrawer__sectionTitle">მონაცემები</h3>
+        <p class="menuDrawer__text">
+          ავტობუსების მოსვლის დრო — <a href="https://ttc.com.ge" target="_blank" class="menuDrawer__inlineLink">TTC</a>.
+          კონტროლიორების ინფო მომხმარებლებისგანაა და შეიძლება 100% ზუსტი არ იყოს.
+        </p>
+      </div>
+
+      <div class="menuDrawer__divider"></div>
+
+      <div class="menuDrawer__section">
+        <div class="menuDrawer__sectionIcon"><i data-lucide="alert-triangle"></i></div>
+        <h3 class="menuDrawer__sectionTitle">შენიშვნა</h3>
+        <p class="menuDrawer__text">
+          საიტი TTC-ის ოფიციალური პროდუქტი არ არის.
+          მონაცემები შეიძლება სრული ან ზუსტი არ იყოს.
+        </p>
+      </div>
+
+    </div>
   </div>
 
   <!-- Activity feed: მუდმივად ჩატანილი პანელი, არა ღილაკით გასახსნელი -->
   <aside class="activityPanel" id="activityPanel">
     <div class="activityPanel__header" id="activityHeader">
       <h2>აქტივობა</h2>
-      <span class="activityPanel__chevron" id="activityChevron">⌃</span>
+      <span class="activityPanel__chevron" id="activityChevron"><i data-lucide="chevron-up"></i></span>
     </div>
     <p class="activityPanel__peek" id="activityPeek">დღეს ჯერ არავის შეუტყობინებია</p>
     <div class="activityList" id="activityList">
