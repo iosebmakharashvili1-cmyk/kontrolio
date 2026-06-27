@@ -27,6 +27,19 @@ const MAX_ACTIVITY_ENTRIES = 500;
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+/* ---------- გაჩერებების სახელების lookup (server-side, client-ს არ ვუჯეროთ) ----------
+   stopNames.json არის { stopId: "სახელი" } — გენერირებულია stops.js-ის იმავე
+   მონაცემიდან. POST /api/reports-ში stopName-ს client-დან არ ვიღებთ, რომ
+   ვინმემ თვითნებური (და, კიდევ უარესი, HTML/JS-შემცველი) ტექსტი არ ჩაგვინერგოს
+   Activity feed-ში. */
+let STOP_NAMES = {};
+try {
+  STOP_NAMES = JSON.parse(fs.readFileSync(path.join(__dirname, "stopNames.json"), "utf8"));
+  console.log(`stopNames.json ჩაიტვირთა — ${Object.keys(STOP_NAMES).length} გაჩერება`);
+} catch (err) {
+  console.error("stopNames.json ჩატვირთვა ჩავარდა — Activity-ში გამოჩნდება generic სახელები:", err.message);
+}
+
 /* ---------- in-memory state, დისკზე სარეზერვო ასლით ---------- */
 let store = { reports: {}, activity: [] };
 
@@ -162,7 +175,7 @@ app.get("/api/reports", (req, res) => {
 });
 
 app.post("/api/reports", (req, res) => {
-  const { stopId, status, stopName } = req.body || {};
+  const { stopId, status } = req.body || {};
 
   if (typeof stopId !== "string" || !stopId.trim()) {
     return res.status(400).json({ error: "stopId is required" });
@@ -170,13 +183,15 @@ app.post("/api/reports", (req, res) => {
   if (!VALID_STATUSES.has(status)) {
     return res.status(400).json({ error: 'status must be "inspector" or "clear"' });
   }
+  if (Object.keys(STOP_NAMES).length > 0 && !Object.prototype.hasOwnProperty.call(STOP_NAMES, stopId)) {
+    return res.status(400).json({ error: "unknown stopId" });
+  }
 
   const ts = Date.now();
   const reportDate = serviceDayKey();
-  const safeName =
-    typeof stopName === "string" && stopName.trim()
-      ? stopName.trim().slice(0, 120)
-      : "გაჩერება";
+  // client-ის stopName-ს არ ვუჯერებთ — სახელს ჩვენივე lookup-დან ვიღებთ,
+  // რომ ვინმემ თვითნებური/მავნე ტექსტი არ ჩაგვინერგოს Activity feed-ში.
+  const safeName = STOP_NAMES[stopId] || "გაჩერება";
 
   store.reports[stopId] = { status, ts, reportDate };
 
