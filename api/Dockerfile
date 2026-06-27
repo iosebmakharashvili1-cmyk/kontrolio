@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 
-COPY server.js ./
+COPY server.js stopNames.json ./
 
 RUN mkdir -p /app/data
 VOLUME ["/app/data"]
