@@ -1,0 +1,11 @@
+# Secrets — არასოდეს commit
+api/.env
+
+# Dependencies
+api/node_modules/
+
+# Runtime/user-generated მონაცემები — არ ეკუთვნის git-ს
+api/data/
+
+# OS/editor noise
+.DS_Store
