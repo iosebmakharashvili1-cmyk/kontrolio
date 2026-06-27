@@ -137,6 +137,19 @@ function typeLabel(types) {
   return "ავტობუსი";
 }
 
+/* innerHTML-ში ჩასასმელი ნებისმიერი დინამიური სტრინგი (server-ის,
+   TTC-ის, ან ჩვენი stops.js-ის მონაცემიდანაც) ამით ვატარებთ —
+   defense-in-depth, რომ ერთმა "feed" ცვლილებამ მომავალში
+   ისევ XSS არ გამოაჩინოს. */
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 /* ============================================================
    THEME SYSTEM (light / dark)
    ------------------------------------------------------------
@@ -365,10 +378,10 @@ function renderStatusBanner(report) {
 
 function renderRouteChips(stop) {
   const busChips = (stop.routesBus || []).map(
-    (r) => `<span class="routeChip routeChip--bus">${r}</span>`
+    (r) => `<span class="routeChip routeChip--bus">${escapeHtml(r)}</span>`
   );
   const miniChips = (stop.routesMinibus || []).map(
-    (r) => `<span class="routeChip routeChip--minibus">${r}</span>`
+    (r) => `<span class="routeChip routeChip--minibus">${escapeHtml(r)}</span>`
   );
   const all = [...busChips, ...miniChips];
   sheetRouteChips.innerHTML = all.length
@@ -390,8 +403,8 @@ function renderArrivalsList(arrivals, stop) {
         : `<span class="arrivalItem__scheduled" title="განრიგით">○</span>`;
       return `
       <div class="arrivalItem">
-        <span class="routeChip ${chipClass}">${a.route}</span>
-        <span class="arrivalItem__direction">${a.direction || "—"}</span>
+        <span class="routeChip ${chipClass}">${escapeHtml(a.route)}</span>
+        <span class="arrivalItem__direction">${escapeHtml(a.direction || "—")}</span>
         <span class="arrivalItem__time">${realtimeBadge}${formatEta(a.etaMs)}</span>
       </div>`;
     })
@@ -528,10 +541,11 @@ const activityPeek = document.getElementById("activityPeek");
 const activityList = document.getElementById("activityList");
 
 function formatActivityText(entry) {
+  const name = escapeHtml(entry.stopName);
   if (entry.status === "inspector") {
-    return `${entry.stopName} გაჩერებაზე კონტროლიორი გამოჩნდა (${clockTime(entry.ts)})`;
+    return `${name} გაჩერებაზე კონტროლიორი გამოჩნდა (${clockTime(entry.ts)})`;
   }
-  return `${entry.stopName} გაჩერება თავისუფალია`;
+  return `${name} გაჩერება თავისუფალია`;
 }
 
 function renderActivityList(entries) {
@@ -613,7 +627,7 @@ function renderSearchResults(query) {
         const meta = [typeLabel(s.types), allRoutes.length ? allRoutes.join(", ") : null]
           .filter(Boolean)
           .join(" · ");
-        return `<div class="searchResult" data-id="${s.id}">${s.name}<small>${meta}</small></div>`;
+        return `<div class="searchResult" data-id="${s.id}">${escapeHtml(s.name)}<small>${escapeHtml(meta)}</small></div>`;
       })
       .join("");
   }
