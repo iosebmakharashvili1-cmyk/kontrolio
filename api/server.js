@@ -226,9 +226,19 @@ const TTC_HEADERS = {
   Origin: "https://transit.ttc.com.ge",
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  "Cookie": "cookiesession1=678A3E12D8A7C33A62974EF2C547EA69",
-  "X-api-key": "c0a2f304-551a-4d08-b8df-2c53ecd57f9f",
 };
+if (process.env.TTC_COOKIE) {
+  TTC_HEADERS["Cookie"] = process.env.TTC_COOKIE;
+}
+if (process.env.TTC_API_KEY) {
+  TTC_HEADERS["X-api-key"] = process.env.TTC_API_KEY;
+}
+if (!process.env.TTC_COOKIE || !process.env.TTC_API_KEY) {
+  console.warn(
+    "[arrivals] TTC_COOKIE/TTC_API_KEY env ცვლადები არ არის დაყენებული — " +
+      "მოსვლის დროების ფუნქცია სავარაუდოდ არ მუშაობს. იხილე api/.env.example."
+  );
+}
 
 app.get("/api/arrivals", async (req, res) => {
   const idsParam = req.query.ids;
