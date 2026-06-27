@@ -15,6 +15,8 @@ services:
     build: ./api
     container_name: kontrolio-api
     restart: unless-stopped
+    env_file:
+      - ./api/.env
     volumes:
       - ./api/data:/app/data
     expose:
