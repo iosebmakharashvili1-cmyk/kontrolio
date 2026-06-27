@@ -18,6 +18,7 @@
    ============================================================ */
 
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
 
@@ -150,6 +151,12 @@ function scheduleCleanup() {
 
 /* ---------- Express app ---------- */
 const app = express();
+
+// nginx არის ერთადერთი proxy ჩვენსა და client-ს შორის (docker network-ში) —
+// ეს საჭიროა, რომ req.ip ნამდვილ ვიზიტორის IP-ს აღმოაჩენდეს
+// X-Forwarded-For-დან, და არა nginx-ის საკუთარ docker-internal მისამართს.
+app.set("trust proxy", 1);
+
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -163,6 +170,25 @@ app.use((req, res, next) => {
 
 const VALID_STATUSES = new Set(["inspector", "clear"]);
 
+/* ---------- Rate limiting ----------
+   ორ ფენად: ზოგადი ჭერი ყველა /api-ზე (ბოროტმოქმედული scripting-ის წინააღმდეგ),
+   და მკაცრი ჭერი მხოლოდ POST /api/reports-ზე (spam-ი ცრუ შეტყობინებებით). */
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/", generalLimiter);
+
+const reportsLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "ძალიან ხშირი შეტყობინებები — სცადე რამდენიმე წუთში" },
+});
+
 app.get("/api/reports", (req, res) => {
   const current = serviceDayKey();
   const out = {};
@@ -174,7 +200,7 @@ app.get("/api/reports", (req, res) => {
   res.json(out);
 });
 
-app.post("/api/reports", (req, res) => {
+app.post("/api/reports", reportsLimiter, (req, res) => {
   const { stopId, status } = req.body || {};
 
   if (typeof stopId !== "string" || !stopId.trim()) {
