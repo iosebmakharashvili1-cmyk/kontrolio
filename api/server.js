@@ -301,6 +301,32 @@ app.get("/api/arrivals", async (req, res) => {
   res.json({ stops: ok });
 });
 
+/* ---------- ონლაინ მომხმარებლების თვლა ----------
+   კლიენტი ყოველ 20 წამში აგზავნის GET /api/heartbeat.
+   ვინც ბოლო 45 წამში გამოჩნდა — ჩაითვლება "ონლაინად".
+   IP-ებს ვინახავთ მხოლოდ მეხსიერებაში (არ ვწერთ დისკზე). */
+const HEARTBEAT_TTL_MS = 45_000; // 45 წამი
+const onlineIps = new Map(); // ip -> lastSeenMs
+
+function pruneOffline() {
+  const now = Date.now();
+  for (const [ip, ts] of onlineIps) {
+    if (now - ts > HEARTBEAT_TTL_MS) onlineIps.delete(ip);
+  }
+}
+
+app.get("/api/heartbeat", (req, res) => {
+  const ip = req.ip || "unknown";
+  onlineIps.set(ip, Date.now());
+  pruneOffline();
+  res.json({ online: onlineIps.size });
+});
+
+app.get("/api/online", (req, res) => {
+  pruneOffline();
+  res.json({ online: onlineIps.size });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`kontrolio-api listening on :${PORT}`);
