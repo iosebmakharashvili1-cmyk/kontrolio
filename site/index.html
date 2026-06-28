@@ -28,10 +28,6 @@
       <h1>სად არის კონტროლიორი?</h1>
     </div>
     <div class="topbar__actions">
-      <div class="onlineBadge" id="onlineBadge" title="ახლა საიტზეა">
-        <span class="onlineBadge__dot"></span>
-        <span class="onlineBadge__count" id="onlineCount">—</span>
-      </div>
       <button id="themeBtn" class="iconbtn themeBtn" title="თემა" aria-label="თემა"><i data-lucide="sun" id="themeIcon"></i></button>
       <button id="activityBtn" class="iconbtn activityToggleBtn" title="აქტივობა" aria-label="აქტივობა"><i data-lucide="bell"></i></button>
     </div>
@@ -201,11 +197,18 @@
     /* ---- ონლაინ მომხმარებლების badge ---- */
     (function () {
       const countEl = document.getElementById("onlineCount");
-      const API = "/api/heartbeat";
+
+      // თითოეულ ჩანართს/მომხმარებელს უნიკალური ID ეძლევა
+      // sessionStorage-ში ინახება, ტაბის დახურვისას ქრება
+      let sid = sessionStorage.getItem("_kontrolio_sid");
+      if (!sid) {
+        sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        sessionStorage.setItem("_kontrolio_sid", sid);
+      }
 
       async function beat() {
         try {
-          const r = await fetch(API);
+          const r = await fetch("/api/heartbeat?sid=" + encodeURIComponent(sid));
           if (!r.ok) return;
           const { online } = await r.json();
           countEl.textContent = online;
