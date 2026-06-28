@@ -2,7 +2,7 @@
   "name": "kontrolio-api",
   "version": "1.0.0",
   "private": true,
-  "description": "kontrolio.hsonlab.xyz – inspector reports API",
+  "description": "kontrolio.live – inspector reports API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
