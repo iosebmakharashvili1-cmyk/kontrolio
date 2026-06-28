@@ -18,7 +18,6 @@
    ============================================================ */
 
 const express = require("express");
-const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
@@ -158,16 +157,7 @@ const app = express();
 // X-Forwarded-For-დან, და არა nginx-ის საკუთარ docker-internal მისამართს.
 app.set("trust proxy", 1);
 
-// საბაზისო security headers (X-Content-Type-Options, X-Frame-Options და სხვ.)
-// CSP-ს ვტოვებთ helmet-ის default-ით — ეს მხოლოდ JSON API-ა, HTML არ ვაბრუნებთ,
-// ამიტომ CSP-ის დაკონფიგურირება აქ დიდად საჩივარს არაფერს მატებს.
-// crossOriginResourcePolicy-ს ვხსნით "cross-origin"-ზე, რომ არ ეწინააღმდეგებოდეს
-// ქვემოთ ჩვენსავე განზრახ ღია CORS-ს (Access-Control-Allow-Origin: *).
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
-
-// ჩვენი request body-ები ათეულ ბაიტს არ აჭარბებენ — express-ის 100kb
-// default-ის ნაცვლად 10kb საკმარისია და ამცირებს abuse-ის ზედაპირს.
-app.use(express.json({ limit: "10kb" }));
+app.use(express.json());
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -281,13 +271,7 @@ app.get("/api/arrivals", async (req, res) => {
   if (typeof idsParam !== "string" || !idsParam.trim()) {
     return res.status(400).json({ error: "ids query param is required" });
   }
-  let ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 4);
-
-  // ვალიდაცია ცნობილ stop-id(ebთან) — იგივე lookup, რასაც POST /api/reports
-  // იყენებს. ცარიელი STOP_NAMES-ის შემთხვევაში (ჩატვირთვა ჩავარდა) fail-open ვართ.
-  if (Object.keys(STOP_NAMES).length > 0) {
-    ids = ids.filter((id) => Object.prototype.hasOwnProperty.call(STOP_NAMES, id));
-  }
+  const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 4);
   if (ids.length === 0) {
     return res.status(400).json({ error: "no valid ids" });
   }
