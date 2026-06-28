@@ -301,30 +301,31 @@ app.get("/api/arrivals", async (req, res) => {
   res.json({ stops: ok });
 });
 
-/* ---------- ონლაინ მომხმარებლების თვლა ----------
-   კლიენტი ყოველ 20 წამში აგზავნის GET /api/heartbeat.
-   ვინც ბოლო 45 წამში გამოჩნდა — ჩაითვლება "ონლაინად".
-   IP-ებს ვინახავთ მხოლოდ მეხსიერებაში (არ ვწერთ დისკზე). */
-const HEARTBEAT_TTL_MS = 45_000; // 45 წამი
-const onlineIps = new Map(); // ip -> lastSeenMs
+/* ---------- ონლაინ მომხმარებლების თვლა (session ID-ით) ----------
+   კლიენტი ყოველ 20 წამში აგზავნის GET /api/heartbeat?sid=<random>.
+   IP-ის მაგივრად session ID ვიყენებთ, რადგან nginx proxy-ს უკან
+   ყველა req.ip ერთი და იგივეა. */
+const HEARTBEAT_TTL_MS = 45_000;
+const onlineSessions = new Map(); // sid -> lastSeenMs
 
 function pruneOffline() {
   const now = Date.now();
-  for (const [ip, ts] of onlineIps) {
-    if (now - ts > HEARTBEAT_TTL_MS) onlineIps.delete(ip);
+  for (const [sid, ts] of onlineSessions) {
+    if (now - ts > HEARTBEAT_TTL_MS) onlineSessions.delete(sid);
   }
 }
 
 app.get("/api/heartbeat", (req, res) => {
-  const ip = req.ip || "unknown";
-  onlineIps.set(ip, Date.now());
+  const sid = typeof req.query.sid === "string" ? req.query.sid.slice(0, 64) : null;
+  if (!sid) return res.status(400).json({ error: "sid required" });
+  onlineSessions.set(sid, Date.now());
   pruneOffline();
-  res.json({ online: onlineIps.size });
+  res.json({ online: onlineSessions.size });
 });
 
 app.get("/api/online", (req, res) => {
   pruneOffline();
-  res.json({ online: onlineIps.size });
+  res.json({ online: onlineSessions.size });
 });
 
 const PORT = process.env.PORT || 3000;
