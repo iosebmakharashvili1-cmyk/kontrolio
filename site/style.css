@@ -875,6 +875,52 @@ html, body{
   transform: translate(-50%, 0);
 }
 
+/* ============================================================
+   ონლაინ მომხმარებლების badge — style.css-ს ბოლოს დაამატე
+   ============================================================ */
+
+.onlineBadge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface, rgba(255,255,255,0.12));
+  border: 1px solid var(--border, rgba(255,255,255,0.18));
+  border-radius: 999px;
+  padding: 3px 10px 3px 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #fff);
+  cursor: default;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.onlineBadge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.35);
+  animation: onlinePulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes onlinePulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.35); }
+  50%       { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.0);  }
+}
+
+.onlineBadge__count {
+  min-width: 14px;
+  text-align: center;
+}
+
+/* dark mode adaptation (თუ გაქვს .dark class body-ზე) */
+.dark .onlineBadge {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 480px){
   .topbar__title h1{ font-size: 15px; }
