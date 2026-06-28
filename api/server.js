@@ -305,7 +305,7 @@ app.get("/api/arrivals", async (req, res) => {
    კლიენტი ყოველ 20 წამში აგზავნის GET /api/heartbeat?sid=<random>.
    IP-ის მაგივრად session ID ვიყენებთ, რადგან nginx proxy-ს უკან
    ყველა req.ip ერთი და იგივეა. */
-const HEARTBEAT_TTL_MS = 45_000;
+const HEARTBEAT_TTL_MS = 25_000;
 const onlineSessions = new Map(); // sid -> lastSeenMs
 
 function pruneOffline() {
