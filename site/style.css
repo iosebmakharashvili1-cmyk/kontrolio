@@ -879,19 +879,22 @@ html, body{
    ონლაინ მომხმარებლების badge — style.css-ს ბოლოს დაამატე
    ============================================================ */
 
+/* topbar-ის ღილაკებთან შეთანხმებული სტილი */
 .onlineBadge {
   display: flex;
   align-items: center;
   gap: 5px;
-  background: var(--surface, rgba(255,255,255,0.12));
-  border: 1px solid var(--border, rgba(255,255,255,0.18));
+  height: 34px; /* იგივე სიმაღლე, რაც .iconbtn */
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 999px;
-  padding: 3px 10px 3px 7px;
+  padding: 0 10px 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text, #fff);
+  color: #e8e6e1;
   cursor: default;
   user-select: none;
+  backdrop-filter: blur(8px);
   transition: background 0.2s;
 }
 
@@ -913,12 +916,6 @@ html, body{
 .onlineBadge__count {
   min-width: 14px;
   text-align: center;
-}
-
-/* dark mode adaptation (თუ გაქვს .dark class body-ზე) */
-.dark .onlineBadge {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.12);
 }
 
 /* ---------- Responsive ---------- */
