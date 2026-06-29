@@ -430,7 +430,8 @@ function openSheet(stopId) {
   renderSheetInfo(stopId);
   overlay.classList.remove("hidden");
   sheet.classList.remove("hidden");
-  loadArrivalsForStop(stopId, STOPS_BY_ID[stopId]);
+  // ARRIVALS დროებით გამორთულია — TTC-ის ნებართვის მოლოდინში
+  // loadArrivalsForStop(stopId, STOPS_BY_ID[stopId]);
 }
 
 function closeSheet() {
@@ -582,24 +583,6 @@ activityHeader.addEventListener("click", () => {
     activityPanel.classList.toggle("show");
   }
 });
-
-/* მობაილზე — რუკაზე touch-ით activity panel-ის დახურვა */
-(function () {
-  let touchStartY = 0;
-  map.getContainer().addEventListener("touchstart", (e) => {
-    touchStartY = e.touches[0].clientY;
-  }, { passive: true });
-
-  map.getContainer().addEventListener("touchend", (e) => {
-    if (window.innerWidth >= 768) return;
-    if (!activityPanel.classList.contains("show")) return;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    // ქვემოთ swipe ან უბრალო tap (dy < 20) — ვხურავთ
-    if (dy > -30) {
-      activityPanel.classList.remove("show");
-    }
-  }, { passive: true });
-})();
 
 loadAndRenderActivity();
 setInterval(loadAndRenderActivity, 10 * 1000);
