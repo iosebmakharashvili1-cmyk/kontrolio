@@ -685,30 +685,32 @@ async function pollAndRender() {
 
 setInterval(pollAndRender, 15 * 1000);
 
-    /* ---- ონლაინ მომხმარებლების badge ---- */
-    (function () {
-      const countEl = document.getElementById("onlineCount");
+/* ---------- ონლაინ მომხმარებლების badge ----------
+   (გადმოტანილი index.html-ის ინლაინ <script>-დან — CSP-ში script-src
+   'unsafe-inline'-ს განზრახ არ ვტოვებთ, ამიტომ ეს გარეშე ფაილში
+   უნდა იყოს, რომ არ დაბლოკოს.) */
+(function () {
+  const countEl = document.getElementById("onlineCount");
+  if (!countEl) return;
 
-      // თითოეულ ჩანართს/მომხმარებელს უნიკალური ID ეძლევა
-      // sessionStorage-ში ინახება, ტაბის დახურვისას ქრება
-      let sid = sessionStorage.getItem("_kontrolio_sid");
-      if (!sid) {
-        sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-        sessionStorage.setItem("_kontrolio_sid", sid);
-      }
+  let sid = sessionStorage.getItem("_kontrolio_sid");
+  if (!sid) {
+    sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    sessionStorage.setItem("_kontrolio_sid", sid);
+  }
 
-      async function beat() {
-        try {
-          const r = await fetch("/api/heartbeat?sid=" + encodeURIComponent(sid));
-          if (!r.ok) return;
-          const { online } = await r.json();
-          countEl.textContent = online;
-        } catch (_) {}
-      }
+  async function beat() {
+    try {
+      const r = await fetch(`${API_BASE}/heartbeat?sid=${encodeURIComponent(sid)}`);
+      if (!r.ok) return;
+      const { online } = await r.json();
+      countEl.textContent = online;
+    } catch (_) {}
+  }
 
-      beat();
-      setInterval(beat, 20_000);
-    })();
+  beat();
+  setInterval(beat, 20 * 1000);
+})();
 
 /* ---------- გაშვება ---------- */
 (async function init() {
