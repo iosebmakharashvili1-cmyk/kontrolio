@@ -162,7 +162,12 @@ app.set("trust proxy", 1);
 // CSP-ი აქ პრაქტიკულად არაფერს ეხება (ბრაუზერი მას მხოლოდ HTML-გვერდის
 // ჩატვირთვისას ითვალისწინებს). crossOriginResourcePolicy-ს ვხსნით,
 // რომ nginx-ის proxy-ს არ შეუშალოს ხელი.
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  // CSP-ს nginx უმკლავდება — Helmet-ის CSP გამოვრთოთ,
+  // რათა browser-ს ორი კონფლიქტური header არ მიუვიდეს.
+  contentSecurityPolicy: false,
+}));
 
 app.use(express.json({ limit: "10kb" }));
 
