@@ -311,8 +311,14 @@ html, body{
   position:absolute; inset:0; z-index:900;
   background: rgba(10,12,20,0.45);
   backdrop-filter: blur(2px);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.28s ease, visibility 0.28s ease;
 }
-.overlay.hidden{ display:none; }
+.overlay.hidden{
+  opacity: 0;
+  visibility: hidden;
+}
 
 .sheet{
   position:absolute; left:0; right:0; bottom:0; z-index:950;
@@ -324,13 +330,13 @@ html, body{
   overflow-y: auto;
   margin: 0 auto;
   box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
-  animation: slideUp 0.22s ease-out;
+  transform: translateY(0);
+  visibility: visible;
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.3s;
 }
-.sheet.hidden{ display:none; }
-
-@keyframes slideUp{
-  from{ transform: translateY(30px); opacity:0; }
-  to{ transform: translateY(0); opacity:1; }
+.sheet.hidden{
+  transform: translateY(105%);
+  visibility: hidden;
 }
 
 .sheet__handle{
@@ -485,8 +491,14 @@ html, body{
   background: linear-gradient(160deg, #07091a 0%, #0d1230 55%, #110820 100%);
   display:flex; align-items:center; justify-content:center;
   overflow:hidden;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
 }
-.nightOverlay.hidden{ display:none; }
+.nightOverlay.hidden{
+  opacity: 0;
+  visibility: hidden;
+}
 
 .nightOverlay::before{
   content:"";
