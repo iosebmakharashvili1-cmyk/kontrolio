@@ -18,6 +18,7 @@
    ============================================================ */
 
 const express = require("express");
+const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
@@ -157,7 +158,13 @@ const app = express();
 // X-Forwarded-For-დან, და არა nginx-ის საკუთარ docker-internal მისამართს.
 app.set("trust proxy", 1);
 
-app.use(express.json());
+// ეს მხოლოდ JSON API-ა, HTML არ ვაბრუნებთ — ამიტომ helmet-ის default
+// CSP-ი აქ პრაქტიკულად არაფერს ეხება (ბრაუზერი მას მხოლოდ HTML-გვერდის
+// ჩატვირთვისას ითვალისწინებს). crossOriginResourcePolicy-ს ვხსნით,
+// რომ nginx-ის proxy-ს არ შეუშალოს ხელი.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+
+app.use(express.json({ limit: "10kb" }));
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
