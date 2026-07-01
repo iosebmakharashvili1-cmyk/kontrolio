@@ -857,9 +857,11 @@ html, body{
     width:auto;
     height: 0;
     border-radius: 20px 20px 0 0;
-    transition: height 0.28s ease;
+    transition: height 0.28s ease, opacity 0.22s ease, transform 0.28s ease, visibility 0s linear 0.28s;
     overflow: hidden;
     visibility: hidden;
+    opacity: 0;
+    transform: translateY(12px);
   }
   .activityPanel__header{ cursor:pointer; }
   .activityPanel__peek{ display:none; }
@@ -869,6 +871,9 @@ html, body{
   .activityPanel.show{
     height: 60vh;
     visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+    transition: height 0.28s ease, opacity 0.22s ease, transform 0.28s ease, visibility 0s linear 0s;
   }
 }
 
