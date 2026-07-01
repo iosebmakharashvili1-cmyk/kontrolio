@@ -193,19 +193,33 @@ const reportsLimiter = rateLimit({
   message: { error: "ძალიან ხშირი შეტყობინებები — სცადე რამდენიმე წუთში" },
 });
 
+/* ---------- დადასტურების (confirmation) ლოგიკა ----------
+   Reward-ის ნაცვლად, რომელიც რაოდენობას აჯილდოებდა (spam-ის რისკი),
+   ვითვლით რამდენმა დამოუკიდებელმა სესიამ (sid) დაადასტურა ერთი და
+   იგივე სტატუსი ერთ გაჩერებაზე. sid მხოლოდ დღის განმავლობაში
+   ცოცხლობს (heartbeat-ის იგივე sessionStorage-ის მნიშვნელობაა) —
+   არ არის მუდმივი იდენტიფიკატორი და არსად არ ქვეყნდება პირადად. */
+const CONFIRM_WINDOW_MS = 90 * 60 * 1000; // 90 წუთი
+
+function confirmCount(rec) {
+  if (!rec || !rec.confirmations) return 1;
+  const cutoff = Date.now() - CONFIRM_WINDOW_MS;
+  return Object.values(rec.confirmations).filter((ts) => ts > cutoff).length;
+}
+
 app.get("/api/reports", (req, res) => {
   const current = serviceDayKey();
   const out = {};
   for (const [stopId, rec] of Object.entries(store.reports)) {
     if (rec.reportDate === current) {
-      out[stopId] = { status: rec.status, ts: rec.ts };
+      out[stopId] = { status: rec.status, ts: rec.ts, confirmCount: confirmCount(rec) };
     }
   }
   res.json(out);
 });
 
 app.post("/api/reports", reportsLimiter, (req, res) => {
-  const { stopId, status } = req.body || {};
+  const { stopId, status, sid } = req.body || {};
 
   if (typeof stopId !== "string" || !stopId.trim()) {
     return res.status(400).json({ error: "stopId is required" });
@@ -216,6 +230,7 @@ app.post("/api/reports", reportsLimiter, (req, res) => {
   if (Object.keys(STOP_NAMES).length > 0 && !Object.prototype.hasOwnProperty.call(STOP_NAMES, stopId)) {
     return res.status(400).json({ error: "unknown stopId" });
   }
+  const safeSid = typeof sid === "string" ? sid.slice(0, 64) : null;
 
   const ts = Date.now();
   const reportDate = serviceDayKey();
@@ -223,7 +238,18 @@ app.post("/api/reports", reportsLimiter, (req, res) => {
   // რომ ვინმემ თვითნებური/მავნე ტექსტი არ ჩაგვინერგოს Activity feed-ში.
   const safeName = STOP_NAMES[stopId] || "გაჩერება";
 
-  store.reports[stopId] = { status, ts, reportDate };
+  const existing = store.reports[stopId];
+  let confirmations;
+  if (existing && existing.status === status && existing.reportDate === reportDate) {
+    // იგივე სტატუსის დადასტურება — ვამატებთ ამ sid-ს არსებულებს
+    confirmations = { ...(existing.confirmations || {}) };
+  } else {
+    // სტატუსი შეიცვალა (ან ეს პირველი შეტყობინებაა) — ვთვლით თავიდან
+    confirmations = {};
+  }
+  if (safeSid) confirmations[safeSid] = ts;
+
+  store.reports[stopId] = { status, ts, reportDate, confirmations };
 
   store.activity.push({ stopName: safeName, status, ts, reportDate });
   if (store.activity.length > MAX_ACTIVITY_ENTRIES) {
@@ -231,7 +257,7 @@ app.post("/api/reports", reportsLimiter, (req, res) => {
   }
 
   persistStore();
-  res.json({ stopId, status, ts });
+  res.json({ stopId, status, ts, confirmCount: confirmCount(store.reports[stopId]) });
 });
 
 app.get("/api/activity", (req, res) => {
