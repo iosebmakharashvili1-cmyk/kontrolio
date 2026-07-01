@@ -2,16 +2,18 @@
    kontrolio-api — server.js
    ------------------------------------------------------------
    მონაცემები ინახება ერთ JSON ფაილში (data/store.json):
-     { reports: { [stopId]: {status, ts, reportDate} },
-       activity: [ {stopName, status, ts, reportDate}, ... ] }
+     { reports: { [stopId]: {status, ts, reportDate, confirmations} },
+       activity: [ {stopName, status, ts, reportDate}, ... ],
+       dailyCounts: { [stopId]: N },
+       dailyCountsDate: "YYYY-MM-DD" }
    in-memory ქეშით წასაკითხი სიჩქარისთვის და ატომური ჩაწერით
    (temp ფაილი + rename).
 
    "სერვის დღე" იშლება ყოველდღე ღამის 00:00 საათზე (თბილისის დროით).
 
    ენდპოინტები:
-   GET  /api/reports   -> { stopId: {status, ts}, ... }  (მხოლოდ მიმდინარე სერვის-დღის)
-   POST /api/reports   -> { stopId, status, stopName } ქმნის/ანახლებს ჩანაწერს + activity-ს
+   GET  /api/reports   -> { stopId: {status, ts, confirmCount, viewerCount, reportsToday}, ... }
+   POST /api/reports   -> { stopId, status, sid } ქმნის/ანახლებს ჩანაწერს + activity-ს + dailyCounts-ს
    GET  /api/activity  -> [ {stopName, status, ts}, ... ]  (უახლესი წინ, მხოლოდ დღევანდელი)
    GET  /api/health    -> { ok: true }
    ============================================================ */
@@ -42,7 +44,7 @@ try {
 }
 
 /* ---------- in-memory state, დისკზე სარეზერვო ასლით ---------- */
-let store = { reports: {}, activity: [] };
+let store = { reports: {}, activity: [], dailyCounts: {}, dailyCountsDate: null };
 
 function loadStore() {
   try {
@@ -51,11 +53,13 @@ function loadStore() {
       store = {
         reports: parsed.reports || {},
         activity: Array.isArray(parsed.activity) ? parsed.activity : [],
+        dailyCounts: parsed.dailyCounts || {},
+        dailyCountsDate: parsed.dailyCountsDate || null,
       };
     }
   } catch (err) {
     console.error("store.json წაკითხვა ჩავარდა, ვაგრძელებთ ცარიელით:", err.message);
-    store = { reports: {}, activity: [] };
+    store = { reports: {}, activity: [], dailyCounts: {}, dailyCountsDate: null };
   }
 }
 
@@ -128,6 +132,15 @@ function cleanupOldData() {
   const beforeLen = store.activity.length;
   store.activity = store.activity.filter((a) => a.reportDate === current);
   removed += beforeLen - store.activity.length;
+
+  if (store.dailyCountsDate !== current) {
+    store.dailyCounts = {};
+    store.dailyCountsDate = current;
+    removed++; // ვაიძულებთ persistStore-ს, თუნდაც reports/activity არ შეცვლილიყო
+  }
+
+  // ცოცხალი (in-memory-only) viewer მთვლელები ყოველდღიურად ვასუფთავებთ
+  stopViewers.clear();
 
   if (removed > 0) {
     persistStore();
@@ -207,12 +220,36 @@ function confirmCount(rec) {
   return Object.values(rec.confirmations).filter((ts) => ts > cutoff).length;
 }
 
+/* ---------- "დაეხმარე X ადამიანს" — viewer-ების თვლა ----------
+   მხოლოდ in-memory (დისკზე არ ინახება — არც საჭიროა, ეფემერული
+   სტატისტიკაა). თითოეული აქტიური რეპორტისთვის ვინახავთ, რომელმა
+   sid-ებმა ნახეს ის GET /api/reports-ის მეშვეობით, სანამ სტატუსი
+   არ შეცვლილა. სტატუსის ცვლილებაზე ვიწყებთ თავიდან — ძველი
+   "დახმარება" ახალ ინფორმაციას აღარ ეხება. */
+const stopViewers = new Map(); // stopId -> Set(sid)
+
+function viewerCount(stopId) {
+  const set = stopViewers.get(stopId);
+  return set ? set.size : 0;
+}
+
 app.get("/api/reports", (req, res) => {
   const current = serviceDayKey();
+  const sid = typeof req.query.sid === "string" ? req.query.sid.slice(0, 64) : null;
   const out = {};
   for (const [stopId, rec] of Object.entries(store.reports)) {
     if (rec.reportDate === current) {
-      out[stopId] = { status: rec.status, ts: rec.ts, confirmCount: confirmCount(rec) };
+      if (sid) {
+        if (!stopViewers.has(stopId)) stopViewers.set(stopId, new Set());
+        stopViewers.get(stopId).add(sid);
+      }
+      out[stopId] = {
+        status: rec.status,
+        ts: rec.ts,
+        confirmCount: confirmCount(rec),
+        viewerCount: viewerCount(stopId),
+        reportsToday: store.dailyCounts[stopId] || 0,
+      };
     }
   }
   res.json(out);
@@ -239,17 +276,25 @@ app.post("/api/reports", reportsLimiter, (req, res) => {
   const safeName = STOP_NAMES[stopId] || "გაჩერება";
 
   const existing = store.reports[stopId];
+  const statusChanged = !existing || existing.status !== status || existing.reportDate !== reportDate;
   let confirmations;
-  if (existing && existing.status === status && existing.reportDate === reportDate) {
+  if (!statusChanged) {
     // იგივე სტატუსის დადასტურება — ვამატებთ ამ sid-ს არსებულებს
     confirmations = { ...(existing.confirmations || {}) };
   } else {
     // სტატუსი შეიცვალა (ან ეს პირველი შეტყობინებაა) — ვთვლით თავიდან
     confirmations = {};
+    stopViewers.delete(stopId); // ახალი ინფოა — ძველი viewer-ები აღარ ითვლება
   }
   if (safeSid) confirmations[safeSid] = ts;
 
   store.reports[stopId] = { status, ts, reportDate, confirmations };
+
+  if (store.dailyCountsDate !== reportDate) {
+    store.dailyCounts = {};
+    store.dailyCountsDate = reportDate;
+  }
+  store.dailyCounts[stopId] = (store.dailyCounts[stopId] || 0) + 1;
 
   store.activity.push({ stopName: safeName, status, ts, reportDate });
   if (store.activity.length > MAX_ACTIVITY_ENTRIES) {
@@ -257,7 +302,13 @@ app.post("/api/reports", reportsLimiter, (req, res) => {
   }
 
   persistStore();
-  res.json({ stopId, status, ts, confirmCount: confirmCount(store.reports[stopId]) });
+  res.json({
+    stopId,
+    status,
+    ts,
+    confirmCount: confirmCount(store.reports[stopId]),
+    reportsToday: store.dailyCounts[stopId],
+  });
 });
 
 app.get("/api/activity", (req, res) => {
