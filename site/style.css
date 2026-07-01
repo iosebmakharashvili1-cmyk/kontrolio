@@ -770,6 +770,48 @@ html, body{
 .menuDrawer__link [data-lucide]{ width:13px; height:13px; }
 .menuDrawer__link:hover{ background: var(--chrome-btn-bg-hover); }
 
+/* ---------- წვლილის ბეჯი (menu drawer) ---------- */
+.contribBadge{
+  display:flex; align-items:center; gap:12px;
+  margin-bottom: 10px;
+}
+.contribBadge__emoji{
+  font-size: 30px; line-height:1;
+  width: 44px; height:44px;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--grey-soft);
+  border-radius: 12px;
+  flex-shrink:0;
+}
+.contribBadge__info{ min-width:0; }
+.contribBadge__tier{
+  font-size: 14.5px; font-weight:700;
+  color: var(--text);
+}
+.contribBadge__count{
+  font-size: 12.5px;
+  color: var(--grey);
+  margin-top: 2px;
+}
+.contribProgress{
+  height: 6px;
+  border-radius: 4px;
+  background: var(--grey-soft);
+  overflow: hidden;
+}
+.contribProgress__bar{
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--green), var(--bus-blue));
+  transition: width 0.4s ease;
+  width: 0%;
+}
+.contribNext{
+  margin-top: 8px !important;
+  font-size: 12px !important;
+  color: var(--grey) !important;
+}
+
 /* ---------- Activity toggle ---------- */
 .activityToggleBtn{ display:none; }
 

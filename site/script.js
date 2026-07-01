@@ -25,6 +25,19 @@ const API_BASE = (() => {
 })();
 let reportsCache = {};
 
+/* ---------- სესიის იდენტიფიკატორი ----------
+   ერთი და იგივე sid გამოიყენება heartbeat-ისთვის (ონლაინ მთვლელი) და
+   report-ების დადასტურების დათვლისთვის. sessionStorage-ში ცოცხლობს
+   მხოლოდ ტაბის გახსნის განმავლობაში — მუდმივი იდენტიფიკატორი არაა. */
+function getSid() {
+  let sid = sessionStorage.getItem("_kontrolio_sid");
+  if (!sid) {
+    sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    sessionStorage.setItem("_kontrolio_sid", sid);
+  }
+  return sid;
+}
+
 async function refreshReportsFromServer() {
   try {
     const res = await fetch(`${API_BASE}/reports`, { cache: "no-store" });
@@ -52,11 +65,11 @@ async function setReport(stopId, status, stopName) {
   const res = await fetch(`${API_BASE}/reports`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ stopId, status, stopName }),
+    body: JSON.stringify({ stopId, status, stopName, sid: getSid() }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const saved = await res.json();
-  reportsCache[stopId] = { status: saved.status, ts: saved.ts };
+  reportsCache[stopId] = { status: saved.status, ts: saved.ts, confirmCount: saved.confirmCount };
   return reportsCache[stopId];
 }
 
@@ -480,7 +493,9 @@ function renderStatusBanner(report) {
     sheetStatusBanner.className = "statusBanner statusBanner--clear";
     sheetStatusBanner.innerHTML = '<span class="statusDot statusDot--clear"></span> თავისუფალია';
   }
-  sheetCaption.textContent = `ბოლო შეტყობინება: ${timeAgo(report.ts)}`;
+  const confirmations = report.confirmCount || 1;
+  const confirmText = confirmations > 1 ? ` · დაადასტურა ${confirmations} ადამიანმა` : "";
+  sheetCaption.textContent = `ბოლო შეტყობინება: ${timeAgo(report.ts)}${confirmText}`;
 }
 
 function renderRouteChips(stop) {
@@ -593,8 +608,15 @@ async function handleReportClick(status, successMsg) {
   try {
     await setReport(stopId, status, stop ? stop.name : "");
     refreshMarker(stopId);
-    showToast(successMsg);
     closeSheet();
+
+    const contrib = incrementContribution();
+    renderContribSection();
+    if (contrib.leveledUp) {
+      showToast(`🎉 ახალი დონე: ${contrib.tier.emoji} ${contrib.tier.label}!`);
+    } else {
+      showToast(successMsg);
+    }
   } catch (err) {
     showToast("შეცდომა — სცადე ისევ 🙁");
   } finally {
@@ -740,6 +762,76 @@ map.getContainer().addEventListener("click", () => {
 loadAndRenderActivity();
 setInterval(loadAndRenderActivity, 10 * 1000);
 
+/* ============================================================
+   წვლილის ქულა / ბეჯები
+   ------------------------------------------------------------
+   განზრახ ფულადი/ნივთიერი ჯილდო არ არის — ეს ხელს შეუწყობდა
+   spam-შეტყობინებებს ცრუ ინფორმაციით. ნაცვლად ამისა, ლოკალურ
+   (device-ზე, localStorage) მიღწევებს ვითვლით — სუფთა
+   რეპუტაციული მოტივაცია, ანონიმურობის დარღვევის გარეშე.
+   ============================================================ */
+const CONTRIB_KEY = "kontrolio-contrib-count";
+
+const CONTRIB_TIERS = [
+  { min: 0,   emoji: "🌱", label: "ახალბედა" },
+  { min: 5,   emoji: "🔍", label: "დამკვირვებელი" },
+  { min: 15,  emoji: "🧭", label: "მეგზური" },
+  { min: 30,  emoji: "⭐", label: "გამოცდილი" },
+  { min: 60,  emoji: "🏅", label: "ექსპერტი" },
+  { min: 100, emoji: "👑", label: "ლეგენდა" },
+];
+
+function getContribCount() {
+  return parseInt(localStorage.getItem(CONTRIB_KEY), 10) || 0;
+}
+
+function tierIndexFor(count) {
+  let idx = 0;
+  for (let i = 0; i < CONTRIB_TIERS.length; i++) {
+    if (count >= CONTRIB_TIERS[i].min) idx = i;
+  }
+  return idx;
+}
+
+function incrementContribution() {
+  const oldCount = getContribCount();
+  const newCount = oldCount + 1;
+  localStorage.setItem(CONTRIB_KEY, String(newCount));
+  const oldTier = tierIndexFor(oldCount);
+  const newTier = tierIndexFor(newCount);
+  return { count: newCount, leveledUp: newTier > oldTier, tier: CONTRIB_TIERS[newTier] };
+}
+
+function renderContribSection() {
+  const emojiEl = document.getElementById("contribEmoji");
+  const tierEl = document.getElementById("contribTier");
+  const countEl = document.getElementById("contribCount");
+  const barEl = document.getElementById("contribProgressBar");
+  const nextEl = document.getElementById("contribNext");
+  if (!emojiEl) return;
+
+  const count = getContribCount();
+  const idx = tierIndexFor(count);
+  const tier = CONTRIB_TIERS[idx];
+  const next = CONTRIB_TIERS[idx + 1];
+
+  emojiEl.textContent = tier.emoji;
+  tierEl.textContent = tier.label;
+  countEl.textContent = count === 0
+    ? "ჯერ არ გაგიგზავნია შეტყობინება"
+    : `${count} შეტყობინება გაგზავნილი`;
+
+  if (next) {
+    const span = next.min - tier.min;
+    const progressed = count - tier.min;
+    barEl.style.width = `${Math.min(100, Math.round((progressed / span) * 100))}%`;
+    nextEl.textContent = `${next.min - count} შეტყობინება დარჩა შემდეგ დონემდე: ${next.emoji} ${next.label}`;
+  } else {
+    barEl.style.width = "100%";
+    nextEl.textContent = "მიაღწიე ყველაზე მაღალ დონეს — მადლობა წვლილისთვის! 👑";
+  }
+}
+
 /* ---------- Toast ---------- */
 const toastEl = document.getElementById("toast");
 let toastTimer = null;
@@ -847,15 +939,9 @@ setInterval(pollAndRender, 15 * 1000);
   const countEl = document.getElementById("onlineCount");
   if (!countEl) return;
 
-  let sid = sessionStorage.getItem("_kontrolio_sid");
-  if (!sid) {
-    sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    sessionStorage.setItem("_kontrolio_sid", sid);
-  }
-
   async function beat() {
     try {
-      const r = await fetch(`${API_BASE}/heartbeat?sid=${encodeURIComponent(sid)}`);
+      const r = await fetch(`${API_BASE}/heartbeat?sid=${encodeURIComponent(getSid())}`);
       if (!r.ok) return;
       const { online } = await r.json();
       countEl.textContent = online;
@@ -871,6 +957,7 @@ setInterval(pollAndRender, 15 * 1000);
   checkNightMode();
   await refreshReportsFromServer();
   renderAllMarkers();
+  renderContribSection();
 
   const initialTheme = getSavedTheme();
   setTheme(initialTheme);
