@@ -266,18 +266,24 @@ html, body{
 /* ---------- Cluster bubbles ---------- */
 .clusterIcon{
   width:38px; height:38px; border-radius:50%;
-  background: var(--bus-blue);
+  background: var(--bus-blue); /* fallback, ჩვეულებრივ inline style-ით გადაიფარება */
   color: var(--ring);
   display:flex; align-items:center; justify-content:center;
   font-weight:700; font-size:13px;
   border: 3px solid var(--ring);
   box-shadow: 0 2px 6px rgba(0,0,0,0.35);
 }
+.clusterIcon span{
+  background: rgba(0,0,0,0.28);
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  display:flex; align-items:center; justify-content:center;
+  line-height:1;
+}
 .clusterIcon--clear{
   background: var(--green);
 }
 .clusterIcon--alert{
-  background: var(--red);
   animation: pulseMarker 1.6s infinite;
 }
 
