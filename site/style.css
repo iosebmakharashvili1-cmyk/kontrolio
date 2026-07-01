@@ -811,6 +811,17 @@ html, body{
   font-size: 12px !important;
   color: var(--grey) !important;
 }
+.contribToday{
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--green-soft);
+  color: #14685f;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.contribToday:empty{ display:none; }
 
 /* ---------- Activity toggle ---------- */
 .activityToggleBtn{ display:none; }

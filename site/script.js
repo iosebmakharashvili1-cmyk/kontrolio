@@ -40,7 +40,7 @@ function getSid() {
 
 async function refreshReportsFromServer() {
   try {
-    const res = await fetch(`${API_BASE}/reports`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE}/reports?sid=${encodeURIComponent(getSid())}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     reportsCache = await res.json();
     return true;
@@ -69,7 +69,13 @@ async function setReport(stopId, status, stopName) {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const saved = await res.json();
-  reportsCache[stopId] = { status: saved.status, ts: saved.ts, confirmCount: saved.confirmCount };
+  reportsCache[stopId] = {
+    status: saved.status,
+    ts: saved.ts,
+    confirmCount: saved.confirmCount,
+    reportsToday: saved.reportsToday,
+    viewerCount: (reportsCache[stopId] && reportsCache[stopId].viewerCount) || 0,
+  };
   return reportsCache[stopId];
 }
 
@@ -147,6 +153,19 @@ function clockTime(ts) {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(ts));
+}
+
+/* სერვისის დღის გასაღები (თბილისის დროით) — server-ის serviceDayKey-ის
+   იგივე ლოგიკა, "დღეს დაეხმარე X ადამიანს"-ის localStorage-ბაკეტისთვის. */
+function tbilisiDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tbilisi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (t) => parts.find((p) => p.type === t).value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 function typeLabel(types) {
@@ -493,9 +512,24 @@ function renderStatusBanner(report) {
     sheetStatusBanner.className = "statusBanner statusBanner--clear";
     sheetStatusBanner.innerHTML = '<span class="statusDot statusDot--clear"></span> თავისუფალია';
   }
-  const confirmations = report.confirmCount || 1;
-  const confirmText = confirmations > 1 ? ` · დაადასტურა ${confirmations} ადამიანმა` : "";
-  sheetCaption.textContent = `ბოლო შეტყობინება: ${timeAgo(report.ts)}${confirmText}`;
+  sheetCaption.textContent = buildCaptionText(report);
+}
+
+/* ---------- სანდოობის დონე (verification, არა raw report-count) ----------
+   რამდენმა დამოუკიდებელმა სესიამ დაადასტურა იგივე სტატუსი მოკლე
+   დროში — ეს ცვლის აღქმულ სანდოობას, არა თავად "ჯილდოს". */
+function trustLabel(confirmCount) {
+  if (confirmCount >= 4) return "მაღალი სანდოობა ✓✓";
+  if (confirmCount >= 2) return "დადასტურებულია ✓";
+  return null; // ერთი შეტყობინება — ჯერ დაუდასტურებელია, ეს ნორმალურია
+}
+
+function buildCaptionText(report) {
+  const parts = [`ბოლო შეტყობინება: ${timeAgo(report.ts)}`];
+  const trust = trustLabel(report.confirmCount || 1);
+  if (trust) parts.push(trust);
+  if (report.reportsToday > 1) parts.push(`დღეს ${report.reportsToday} შეტყობინება ამ გაჩერებაზე`);
+  return parts.join(" · ");
 }
 
 function renderRouteChips(stop) {
@@ -610,8 +644,10 @@ async function handleReportClick(status, successMsg) {
     refreshMarker(stopId);
     closeSheet();
 
+    recordMyContribToday(stopId);
     const contrib = incrementContribution();
     renderContribSection();
+    renderCommunitySection();
     if (contrib.leveledUp) {
       showToast(`🎉 ახალი დონე: ${contrib.tier.emoji} ${contrib.tier.label}!`);
     } else {
@@ -808,6 +844,7 @@ function renderContribSection() {
   const countEl = document.getElementById("contribCount");
   const barEl = document.getElementById("contribProgressBar");
   const nextEl = document.getElementById("contribNext");
+  const todayEl = document.getElementById("contribToday");
   if (!emojiEl) return;
 
   const count = getContribCount();
@@ -830,6 +867,73 @@ function renderContribSection() {
     barEl.style.width = "100%";
     nextEl.textContent = "მიაღწიე ყველაზე მაღალ დონეს — მადლობა წვლილისთვის! 👑";
   }
+
+  if (todayEl) {
+    const { helped, reportCount } = computeHelpedToday();
+    if (reportCount === 0) {
+      todayEl.textContent = "";
+    } else if (helped > 0) {
+      todayEl.textContent = `🙌 დღეს დაეხმარე მინიმუმ ${helped} ადამიანს (${reportCount} შეტყობინებით)`;
+    } else {
+      todayEl.textContent = `📍 დღეს გაგზავნე ${reportCount} შეტყობინება — მალე გამოჩნდება რამდენს დაეხმარები`;
+    }
+  }
+}
+
+/* ---------- "დღეს დაეხმარე X ადამიანს" — პირადი (device-ზე) ტრეკინგი ----------
+   ინახავს, რომელ გაჩერებებზე შენ თვითონ შეატყობინე დღეს. ეს არასდროს
+   იგზავნება სერვერზე პირადობასთან დაკავშირებული სახით — მხოლოდ
+   localStorage-შია, ერთი დღით (Tbilisi calendar day). "დახმარებულების"
+   რიცხვი მიახლოებითია: რამდენმა სხვა სესიამ ნახა ეს კონკრეტული სტატუსი,
+   სანამ ის აქტიური იყო. */
+const MY_CONTRIB_TODAY_KEY = "kontrolio-my-contrib-today";
+
+function getMyContribToday() {
+  const today = tbilisiDateKey();
+  try {
+    const raw = localStorage.getItem(MY_CONTRIB_TODAY_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data && data.date === today && Array.isArray(data.stopIds)) return data;
+    }
+  } catch (_) {}
+  return { date: today, stopIds: [], reportCount: 0 };
+}
+
+function recordMyContribToday(stopId) {
+  const data = getMyContribToday();
+  if (!data.stopIds.includes(stopId)) data.stopIds.push(stopId);
+  data.reportCount = (data.reportCount || 0) + 1;
+  try {
+    localStorage.setItem(MY_CONTRIB_TODAY_KEY, JSON.stringify(data));
+  } catch (_) {}
+  return data;
+}
+
+function computeHelpedToday() {
+  const data = getMyContribToday();
+  let helped = 0;
+  data.stopIds.forEach((id) => {
+    const r = reportsCache[id];
+    if (r && typeof r.viewerCount === "number") helped += r.viewerCount;
+  });
+  return { helped, reportCount: data.reportCount || 0 };
+}
+
+/* ---------- საზოგადოების დღევანდელი აქტივობა (menu drawer) ----------
+   citywide ჯამი გამოთვლილია client-ზე, reportsToday ველიდან, რომელიც
+   უკვე მოდის GET /api/reports-ის ყოველი აქტიური გაჩერებისთვის. */
+function renderCommunitySection() {
+  const el = document.getElementById("communityStats");
+  if (!el) return;
+  const entries = Object.values(reportsCache);
+  if (entries.length === 0) {
+    el.textContent = "დღეს ჯერ არავის შეუტყობინებია";
+    return;
+  }
+  const totalReports = entries.reduce((sum, r) => sum + (r.reportsToday || 0), 0);
+  const activeStops = entries.length;
+  el.textContent = `დღეს გაგზავნილია ${totalReports} შეტყობინება ${activeStops} გაჩერებაზე`;
 }
 
 /* ---------- Toast ---------- */
@@ -926,6 +1030,8 @@ async function pollAndRender() {
   if (ok) {
     renderAllMarkers();
     if (activeStopId) renderSheetInfo(activeStopId);
+    renderCommunitySection();
+    renderContribSection();
   }
 }
 
@@ -958,6 +1064,7 @@ setInterval(pollAndRender, 15 * 1000);
   await refreshReportsFromServer();
   renderAllMarkers();
   renderContribSection();
+  renderCommunitySection();
 
   const initialTheme = getSavedTheme();
   setTheme(initialTheme);
