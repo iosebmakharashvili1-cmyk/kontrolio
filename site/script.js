@@ -335,21 +335,27 @@ const clusterGroup = L.markerClusterGroup({
   disableClusteringAtZoom: 17,
   iconCreateFunction: (cluster) => {
     const childMarkers = cluster.getAllChildMarkers();
-    const total = childMarkers.length;
 
-    /* თითოეული სტატუსის მარკერების დათვლა კლასტერში */
-    const counts = { inspector: 0, stale: 0, clear: 0, unknown: 0 };
+    /* თითოეული სტატუსის მარკერების დათვლა კლასტერში.
+       "unknown" ფერად არ ითვლება — ისევე, როგორც თავდაპირველ ვერსიაში,
+       მისი არსებობა pie-ს არ ცვლის და მხოლოდ მაშინ ჩანს (ლურჯად),
+       თუ კლასტერში საერთოდ არაფერია მონიშნული. */
+    const counts = { inspector: 0, stale: 0, clear: 0 };
     childMarkers.forEach((m) => {
       const s = m.options.reportStatus;
-      counts[s] = (counts[s] || 0) + 1;
+      if (s in counts) counts[s] += 1;
     });
-    const presentStatuses = CLUSTER_STATUS_ORDER.filter((s) => counts[s] > 0);
+    const coloredTotal = counts.inspector + counts.stale + counts.clear;
+    const presentStatuses = CLUSTER_STATUS_ORDER.filter((s) => s !== "unknown" && counts[s] > 0);
 
     let bg;
     let extraCls = "";
-    if (presentStatuses.length <= 1) {
+    if (presentStatuses.length === 0) {
+      /* არცერთი მონიშნული გაჩერება — ძველებურად ლურჯი */
+      bg = CLUSTER_COLORS.unknown;
+    } else if (presentStatuses.length === 1) {
       /* ერთი ფერი — მარტივი მთლიანი წრე, ისე როგორც ადრე იყო */
-      const only = presentStatuses[0] || "unknown";
+      const only = presentStatuses[0];
       bg = CLUSTER_COLORS[only];
       if (only === "inspector") extraCls = " clusterIcon--alert";
     } else {
@@ -357,9 +363,9 @@ const clusterGroup = L.markerClusterGroup({
          წილებით, რომ თითოეული სტატუსი ვიზუალურად ჩანდეს */
       let acc = 0;
       const stops = presentStatuses.map((s) => {
-        const from = (acc / total) * 360;
+        const from = (acc / coloredTotal) * 360;
         acc += counts[s];
-        const to = (acc / total) * 360;
+        const to = (acc / coloredTotal) * 360;
         return `${CLUSTER_COLORS[s]} ${from}deg ${to}deg`;
       });
       bg = `conic-gradient(${stops.join(", ")})`;
@@ -367,7 +373,7 @@ const clusterGroup = L.markerClusterGroup({
     }
 
     return L.divIcon({
-      html: `<div class="clusterIcon${extraCls}" style="background:${bg};"><span>${total}</span></div>`,
+      html: `<div class="clusterIcon${extraCls}" style="background:${bg};"><span>${childMarkers.length}</span></div>`,
       className: "",
       iconSize: [38, 38],
     });
