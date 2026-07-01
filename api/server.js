@@ -7,8 +7,7 @@
    in-memory ქეშით წასაკითხი სიჩქარისთვის და ატომური ჩაწერით
    (temp ფაილი + rename).
 
-   "სერვის დღე" იშლება ყოველდღე 23:30 საათზე (თბილისის დროით),
-   ღამის 00:00-ის ნაცვლად.
+   "სერვის დღე" იშლება ყოველდღე ღამის 00:00 საათზე (თბილისის დროით).
 
    ენდპოინტები:
    GET  /api/reports   -> { stopId: {status, ts}, ... }  (მხოლოდ მიმდინარე სერვის-დღის)
@@ -69,10 +68,10 @@ function persistStore() {
 loadStore();
 
 /* ---------- "სერვის დღის" გასაანგარიშებელი ლოგიკა ----------
-   ნაცვლად ჩვეული კალენდარული თარიღისა (რომელიც 00:00-ზე იცვლება),
-   ჩვენი "დღე" იცვლება 23:30-ზე. */
-const CUTOFF_HOUR = 23;
-const CUTOFF_MINUTE = 30;
+   "დღე" ემთხვევა ჩვეულებრივ კალენდარულ თარიღს თბილისის დროით
+   და იცვლება ღამის 00:00-ზე. */
+const CUTOFF_HOUR = 0;
+const CUTOFF_MINUTE = 0;
 
 function tbilisiParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -101,23 +100,16 @@ function pad2(n) {
 }
 
 function serviceDayKey(date = new Date()) {
+  // cutoff ღამის 00:00-ზეა, ამიტომ "სერვის დღე" უბრალოდ თბილისის
+  // კალენდარული თარიღის ტოლია.
   const p = tbilisiParts(date);
-  const afterCutoff =
-    p.hour > CUTOFF_HOUR || (p.hour === CUTOFF_HOUR && p.minute >= CUTOFF_MINUTE);
-
-  if (!afterCutoff) {
-    return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
-  }
-  const next = new Date(Date.UTC(p.year, p.month - 1, p.day, 12, 0, 0));
-  next.setUTCDate(next.getUTCDate() + 1);
-  return `${next.getUTCFullYear()}-${pad2(next.getUTCMonth() + 1)}-${pad2(next.getUTCDate())}`;
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
 }
 
 function msUntilNextCleanupWindow() {
   const p = tbilisiParts();
   const secondsSinceMidnight = p.hour * 3600 + p.minute * 60 + p.second;
-  const targetSeconds = CUTOFF_HOUR * 3600 + CUTOFF_MINUTE * 60; // 23:30
-  let diff = targetSeconds - secondsSinceMidnight;
+  let diff = 24 * 3600 - secondsSinceMidnight; // შემდეგ 00:00-მდე დარჩენილი დრო
   if (diff <= 0) diff += 24 * 3600;
   return diff * 1000;
 }
