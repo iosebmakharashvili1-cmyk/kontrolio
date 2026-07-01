@@ -41,6 +41,13 @@ function getReport(stopId) {
   return reportsCache[stopId] || null;
 }
 
+/* inspector report-ი 2 საათზე უფრო ძველია და "clear" არ მოჰყოლია — stale */
+const STALE_MS = 2 * 60 * 60 * 1000;
+function isStale(report) {
+  if (!report || report.status !== "inspector") return false;
+  return Date.now() - report.ts > STALE_MS;
+}
+
 async function setReport(stopId, status, stopName) {
   const res = await fetch(`${API_BASE}/reports`, {
     method: "POST",
@@ -302,6 +309,7 @@ const BUS_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 
 function statusClass(report) {
   if (!report) return "stopMarker--unknown";
+  if (isStale(report)) return "stopMarker--stale";
   return report.status === "inspector" ? "stopMarker--inspector" : "stopMarker--clear";
 }
 
@@ -364,6 +372,12 @@ function renderStatusBanner(report) {
     sheetStatusBanner.className = "statusBanner statusBanner--unknown";
     sheetStatusBanner.innerHTML = '<span class="statusDot statusDot--unknown"></span> სტატუსი უცნობია';
     sheetCaption.textContent = "ჯერ არავის შეუტყობინებია";
+    return;
+  }
+  if (report.status === "inspector" && isStale(report)) {
+    sheetStatusBanner.className = "statusBanner statusBanner--stale";
+    sheetStatusBanner.innerHTML = '<span class="statusDot statusDot--stale"></span> შესაძლოა აღარ არის';
+    sheetCaption.textContent = `ბოლო შეტყობინება: ${timeAgo(report.ts)} (2 სთ-ზე მეტია)`;
     return;
   }
   if (report.status === "inspector") {
@@ -445,6 +459,17 @@ function setActionButtonsDisabled(disabled) {
   btnClear.disabled = disabled;
 }
 
+const REPORT_RADIUS_M = 1000; // 1 კმ
+
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 async function handleReportClick(status, successMsg) {
   if (!activeStopId) return;
   if (isNightTime()) {
@@ -454,6 +479,24 @@ async function handleReportClick(status, successMsg) {
   const stopId = activeStopId;
   const stop = STOPS_BY_ID[stopId];
   setActionButtonsDisabled(true);
+
+  /* ლოკაციის შემოწმება */
+  try {
+    const pos = await new Promise((res, rej) =>
+      navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 8000 })
+    );
+    const dist = haversineDistance(pos.coords.latitude, pos.coords.longitude, stop.lat, stop.lng);
+    if (dist > REPORT_RADIUS_M) {
+      showToast(`შენ ამ გაჩერებიდან ${Math.round(dist)}მ-ში ხარ — მხოლოდ 1კმ რადიუსში შეიძლება მონიშვნა`);
+      setActionButtonsDisabled(false);
+      return;
+    }
+  } catch {
+    showToast("ლოკაციის წვდომა საჭიროა მონიშვნისთვის 📍");
+    setActionButtonsDisabled(false);
+    return;
+  }
+
   try {
     await setReport(stopId, status, stop ? stop.name : "");
     refreshMarker(stopId);
@@ -583,6 +626,23 @@ activityHeader.addEventListener("click", () => {
     activityPanel.classList.toggle("show");
   }
 });
+
+/* რუკაზე კლიკით და touch-ით activity panel-ის დახურვა */
+map.getContainer().addEventListener("click", () => {
+  activityPanel.classList.remove("show");
+});
+
+(function () {
+  let touchStartY = 0;
+  map.getContainer().addEventListener("touchstart", (e) => {
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  map.getContainer().addEventListener("touchend", (e) => {
+    if (!activityPanel.classList.contains("show")) return;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (dy > -30) activityPanel.classList.remove("show");
+  }, { passive: true });
+})();
 
 loadAndRenderActivity();
 setInterval(loadAndRenderActivity, 10 * 1000);

@@ -231,6 +231,7 @@ html, body{
 .legend__dot--inspector{ background: var(--red); }
 .legend__dot--clear{ background: var(--green); }
 .legend__dot--unknown{ background: var(--bus-blue); }
+.legend__dot--stale{ background: #d97706; }
 
 /* ---------- Custom markers ---------- */
 .stopMarker{
@@ -245,6 +246,7 @@ html, body{
 
 .stopMarker--unknown{ background: var(--bus-blue); }
 .stopMarker--clear{ background: var(--green); }
+.stopMarker--stale{ background: #d97706; }
 .stopMarker--inspector{
   background: var(--red);
   animation: pulseMarker 1.6s infinite;
@@ -370,6 +372,8 @@ html, body{
 .statusBanner--unknown{ background: var(--grey-soft); color: var(--text); }
 .statusBanner--clear{ background: var(--green-soft); color: #14685f; }
 .statusBanner--inspector{ background: var(--red-soft); color: #8a1f17; }
+.statusBanner--stale{ background: #fef3c7; color: #92400e; }
+.statusDot--stale{ background: #d97706; }
 
 /* ---------- Route chips ---------- */
 .routeChips{
