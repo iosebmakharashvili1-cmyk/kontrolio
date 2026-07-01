@@ -321,20 +321,53 @@ const LocateControl = L.Control.extend({
 map.addControl(new LocateControl());
 
 /* ---------- კლასტერები ---------- */
+const CLUSTER_COLORS = {
+  inspector: "var(--red)",
+  stale: "#d97706",
+  clear: "var(--green)",
+  unknown: "var(--bus-blue)",
+};
+/* რიგითობა განსაზღვრავს pie slice-ების თანმიმდევრობას */
+const CLUSTER_STATUS_ORDER = ["inspector", "stale", "clear", "unknown"];
+
 const clusterGroup = L.markerClusterGroup({
   maxClusterRadius: 55,
   disableClusteringAtZoom: 17,
   iconCreateFunction: (cluster) => {
     const childMarkers = cluster.getAllChildMarkers();
-    const hasInspector = childMarkers.some((m) => m.options.reportStatus === "inspector");
-    const hasClear = childMarkers.some((m) => m.options.reportStatus === "clear");
+    const total = childMarkers.length;
 
-    let cls = "clusterIcon";
-    if (hasInspector) cls += " clusterIcon--alert";
-    else if (hasClear) cls += " clusterIcon--clear";
+    /* თითოეული სტატუსის მარკერების დათვლა კლასტერში */
+    const counts = { inspector: 0, stale: 0, clear: 0, unknown: 0 };
+    childMarkers.forEach((m) => {
+      const s = m.options.reportStatus;
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    const presentStatuses = CLUSTER_STATUS_ORDER.filter((s) => counts[s] > 0);
+
+    let bg;
+    let extraCls = "";
+    if (presentStatuses.length <= 1) {
+      /* ერთი ფერი — მარტივი მთლიანი წრე, ისე როგორც ადრე იყო */
+      const only = presentStatuses[0] || "unknown";
+      bg = CLUSTER_COLORS[only];
+      if (only === "inspector") extraCls = " clusterIcon--alert";
+    } else {
+      /* რამდენიმე ფერი ერთ არეალში — conic-gradient pie, პროპორციული
+         წილებით, რომ თითოეული სტატუსი ვიზუალურად ჩანდეს */
+      let acc = 0;
+      const stops = presentStatuses.map((s) => {
+        const from = (acc / total) * 360;
+        acc += counts[s];
+        const to = (acc / total) * 360;
+        return `${CLUSTER_COLORS[s]} ${from}deg ${to}deg`;
+      });
+      bg = `conic-gradient(${stops.join(", ")})`;
+      if (counts.inspector > 0) extraCls = " clusterIcon--alert";
+    }
 
     return L.divIcon({
-      html: `<div class="${cls}">${childMarkers.length}</div>`,
+      html: `<div class="clusterIcon${extraCls}" style="background:${bg};"><span>${total}</span></div>`,
       className: "",
       iconSize: [38, 38],
     });
@@ -358,6 +391,15 @@ function statusClass(report) {
   return report.status === "inspector" ? "stopMarker--inspector" : "stopMarker--clear";
 }
 
+/* ვიზუალური სტატუსი — ეს ის ფერია, რასაც მომხმარებელი მარკერზე რეალურად ხედავს
+   (inspector/clear/stale/unknown), განსხვავებით report.status-გან, რომელიც
+   stale-ს არ ითვალისწინებს. კლასტერების შეღებვა სწორედ ამაზეა დამოკიდებული. */
+function visualStatus(report) {
+  if (!report) return "unknown";
+  if (isStale(report)) return "stale";
+  return report.status === "inspector" ? "inspector" : "clear";
+}
+
 function buildIcon(report) {
   return L.divIcon({
     className: "",
@@ -374,11 +416,11 @@ function renderAllMarkers() {
 
     if (markers[stop.id]) {
       markers[stop.id].setIcon(icon);
-      markers[stop.id].options.reportStatus = report ? report.status : null;
+      markers[stop.id].options.reportStatus = visualStatus(report);
     } else {
       const marker = L.marker([stop.lat, stop.lng], {
         icon,
-        reportStatus: report ? report.status : null,
+        reportStatus: visualStatus(report),
       });
       marker.on("click", () => openSheet(stop.id));
       markers[stop.id] = marker;
@@ -393,7 +435,7 @@ function refreshMarker(stopId) {
   const marker = markers[stopId];
   if (marker) {
     marker.setIcon(buildIcon(report));
-    marker.options.reportStatus = report ? report.status : null;
+    marker.options.reportStatus = visualStatus(report);
     if (clusterGroup.refreshClusters) clusterGroup.refreshClusters(marker);
   }
 }
