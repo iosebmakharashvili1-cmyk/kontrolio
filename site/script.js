@@ -222,7 +222,29 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 /* ---------- "ჩემი ლოკაცია" ---------- */
 let userLocationMarker = null;
 
-function showUserLocation(lat, lng) {
+/* შენახული ლოკაცია localStorage-ში — მომდევნო ვიზიტზე ავტომატურად
+   გამოჩნდეს, სანამ ბრაუზერისგან ახალი, ცოცხალი პოზიცია მოვა. */
+const USER_LOCATION_KEY = "kontrolio-user-location";
+
+function saveUserLocation(lat, lng) {
+  try {
+    localStorage.setItem(USER_LOCATION_KEY, JSON.stringify({ lat, lng, ts: Date.now() }));
+  } catch (_) {}
+}
+
+function loadSavedUserLocation() {
+  try {
+    const raw = localStorage.getItem(USER_LOCATION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (typeof data.lat !== "number" || typeof data.lng !== "number") return null;
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
+function showUserLocation(lat, lng, { persist = true } = {}) {
   if (userLocationMarker) {
     userLocationMarker.setLatLng([lat, lng]);
   } else {
@@ -237,6 +259,29 @@ function showUserLocation(lat, lng) {
       zIndexOffset: 1000,
     }).addTo(map);
   }
+  if (persist) saveUserLocation(lat, lng);
+}
+
+/* გვერდის ჩატვირთვისას წინა სესიის ლოკაცია მაშინვე ვაჩვენოთ
+   (marker-ის სახით, ცენტრირების გარეშე), შემდეგ კი ცოცხალი
+   პოზიციით განვაახლოთ თუ ბრაუზერი დართავს. */
+function restoreSavedUserLocation() {
+  const saved = loadSavedUserLocation();
+  if (!saved) return;
+  showUserLocation(saved.lat, saved.lng, { persist: false });
+}
+
+function tryAutoUpdateUserLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      showUserLocation(pos.coords.latitude, pos.coords.longitude);
+    },
+    () => {
+      /* წყნარად ჩავარდეს — მომხმარებელს შენახული ლოკაცია მაინც უჩანს */
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 5 * 60 * 1000 }
+  );
 }
 
 const LocateControl = L.Control.extend({
@@ -781,6 +826,11 @@ setInterval(pollAndRender, 15 * 1000);
 
   const initialTheme = getSavedTheme();
   setTheme(initialTheme);
+
+  /* წინა ვიზიტის ლოკაცია მაშინვე ვაჩვენოთ, შემდეგ ცოცხალი
+     პოზიციით ჩუმად განვაახლოთ თუ ბრაუზერი დართავს */
+  restoreSavedUserLocation();
+  tryAutoUpdateUserLocation();
 
   lucide.createIcons();
 
