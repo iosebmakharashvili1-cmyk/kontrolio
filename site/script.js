@@ -251,6 +251,12 @@ map.createPane("routeHighlightPane");
 map.getPane("routeHighlightPane").style.zIndex = 450;
 map.getPane("routeHighlightPane").style.pointerEvents = "none";
 
+/* callout ბუშტმა მარკერების პანელზეც კი მაღლა უნდა "გამოიხედოს",
+   რომ ახლომდებარე გაჩერების აიქონმა არ დაფაროს */
+map.createPane("routeCalloutPane");
+map.getPane("routeCalloutPane").style.zIndex = 650;
+map.getPane("routeCalloutPane").style.pointerEvents = "none";
+
 /* ---------- Tile layers ---------- */
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
@@ -504,27 +510,7 @@ const ROUTE_LINE_COLOR = {
   seasonal: "#a855f7",
 };
 
-function lineMidpoint(coords) {
-  return coords[Math.floor((coords.length - 1) / 2)];
-}
-
-function drawRouteLabel(dirGeom, routeNum, type, isSeasonal) {
-  const color = isSeasonal ? ROUTE_LINE_COLOR.seasonal : ROUTE_LINE_COLOR[type];
-  const pos = lineMidpoint(dirGeom.coords);
-  const icon = L.divIcon({
-    className: "",
-    html: `<div class="routeLineLabel" style="background:${color}">${escapeHtml(routeNum)}</div>`,
-  });
-  L.marker(pos, {
-    icon,
-    pane: "routeHighlightPane",
-    interactive: false,
-    keyboard: false,
-    zIndexOffset: 500,
-  }).addTo(routeHighlightLayer);
-}
-
-function drawRouteLine(dirGeom, routeNum, type, isSeasonal) {
+function drawRouteLine(dirGeom, type, isSeasonal) {
   const color = isSeasonal ? ROUTE_LINE_COLOR.seasonal : ROUTE_LINE_COLOR[type];
   const casing = L.polyline(dirGeom.coords, {
     pane: "routeHighlightPane",
@@ -545,11 +531,41 @@ function drawRouteLine(dirGeom, routeNum, type, isSeasonal) {
   });
   casing.addTo(routeHighlightLayer);
   line.addTo(routeHighlightLayer);
-  drawRouteLabel(dirGeom, routeNum, type, isSeasonal);
 }
 
 function clearRouteHighlight() {
   routeHighlightLayer.clearLayers();
+}
+
+/* ერთი აპკის ("callout") ბუშტში ჯგუფდება გაჩერების ყველა მარშრუტის
+   ნომერი, ტიპის მიხედვით ფერადი chip-ებით — ისე, როგორც sheet-ში.
+   ეს ჩანაცვლებს თითო-ხაზზე ცალკე ნომრის წაწერას, რაც ბევრი
+   გადამკვეთი მარშრუტის დროს არეულად გამოიყურებოდა. */
+function buildRouteCalloutHtml(stop) {
+  const groups = [
+    { cls: "bus", nums: stop.routesBus || [] },
+    { cls: "minibus", nums: stop.routesMinibus || [] },
+    { cls: "seasonal", nums: stop.routesSeasonal || [] },
+  ].filter((g) => g.nums.length);
+
+  const chips = groups
+    .flatMap((g) => g.nums.map((n) => `<span class="routeChip routeChip--${g.cls}">${escapeHtml(n)}</span>`))
+    .join("");
+  return `<div class="routeMapCallout">${chips}</div>`;
+}
+
+function drawRouteCallout(stop) {
+  const icon = L.divIcon({
+    className: "",
+    html: buildRouteCalloutHtml(stop),
+  });
+  L.marker([stop.lat, stop.lng], {
+    icon,
+    pane: "routeCalloutPane",
+    interactive: false,
+    keyboard: false,
+    zIndexOffset: 800,
+  }).addTo(routeHighlightLayer);
 }
 
 /* ერთი route_num-ის ორივე მიმართულება ვხატავთ — stops.js-ში
@@ -565,12 +581,13 @@ function highlightRoutesForStop(stop) {
       seen.add(rn);
       const route = ROUTES[rn];
       if (!route) return;
-      route.dirs.forEach((d) => drawRouteLine(d, rn, route.type, route.seasonal));
+      route.dirs.forEach((d) => drawRouteLine(d, route.type, route.seasonal));
     });
   };
   drawAll(stop.routesBus);
   drawAll(stop.routesMinibus);
   drawAll(stop.routesSeasonal);
+  drawRouteCallout(stop);
 }
 
 function selectStop(stopId) {
