@@ -565,6 +565,7 @@ function deselectStop() {
   const prev = selectedStopId;
   selectedStopId = null;
   clearRouteHighlight();
+  hidePeek();
   refreshMarker(prev);
 }
 
@@ -593,6 +594,8 @@ const arrivalsList = document.getElementById("arrivalsList");
 const btnInspector = document.getElementById("btnInspector");
 const btnClear = document.getElementById("btnClear");
 const sheetClose = document.getElementById("sheetClose");
+const sheetPeek = document.getElementById("sheetPeek");
+const sheetPeekName = document.getElementById("sheetPeekName");
 
 let activeStopId = null;
 
@@ -692,6 +695,17 @@ function renderSheetInfo(stopId) {
 /* გაჩერების მონიშვნა (მარკერზე ring + რუკაზე მარშრუტების ხაზები)
    რჩება მანამ, სანამ სხვა გაჩერებას არ ავირჩევთ — sheet-ის დახურვა
    ("ჩაკეცვა") ამას არ შლის, მხოლოდ პანელს მალავს. */
+function showPeek(stopId) {
+  const stop = STOPS_BY_ID[stopId];
+  if (!stop) return;
+  sheetPeekName.textContent = stop.name;
+  sheetPeek.classList.remove("hidden");
+}
+
+function hidePeek() {
+  sheetPeek.classList.add("hidden");
+}
+
 function openSheet(stopId) {
   const stop = STOPS_BY_ID[stopId];
   if (!stop) return;
@@ -700,6 +714,7 @@ function openSheet(stopId) {
     selectStop(stopId);
     highlightRoutesForStop(stop);
   }
+  hidePeek();
   renderSheetInfo(stopId);
   overlay.classList.remove("hidden");
   sheet.classList.remove("hidden");
@@ -707,13 +722,19 @@ function openSheet(stopId) {
   // loadArrivalsForStop(stopId, STOPS_BY_ID[stopId]);
 }
 
-/* "ჩაკეცვა" — მხოლოდ პანელი იმალება, გაჩერების მონიშვნა და
-   მარშრუტების ხაზები რუკაზე ხელუხლებელი რჩება. */
+/* "ჩაკეცვა" — sheet იმალება, მაგრამ პატარა ზოლი გაჩერების სახელით
+   და ამოსაწევი ისრით რჩება ეკრანის ბოლოში. მასზე დაჭერით isev
+   იხსნება სრული პანელი. მონიშვნა და ხაზები რუკაზე ხელუხლებელია. */
 function closeSheet() {
   overlay.classList.add("hidden");
   sheet.classList.add("hidden");
   activeStopId = null;
+  if (selectedStopId) showPeek(selectedStopId);
 }
+
+sheetPeek.addEventListener("click", () => {
+  if (selectedStopId) openSheet(selectedStopId);
+});
 
 function setActionButtonsDisabled(disabled) {
   btnInspector.disabled = disabled;

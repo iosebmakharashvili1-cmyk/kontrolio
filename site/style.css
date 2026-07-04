@@ -371,6 +371,44 @@ html, body{
   flex-shrink:0;
 }
 
+/* ---------- Collapsed stop peek (sheet-ის ჩაკეცილი მდგომარეობა) ---------- */
+.sheetPeek{
+  position:absolute; left:0; right:0; bottom:0; z-index:940;
+  display:flex; align-items:center; gap:10px;
+  width:100%; max-width:480px;
+  margin:0 auto;
+  padding: 13px 20px calc(13px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border:none;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.22);
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  transform: translateY(0);
+  visibility: visible;
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.3s;
+}
+.sheetPeek.hidden{
+  transform: translateY(105%);
+  visibility: hidden;
+}
+.sheetPeek__name{
+  flex:1;
+  text-align:left;
+  font-size:15px; font-weight:700;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.sheetPeek__chevron{
+  flex:none;
+  display:flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:50%;
+  background: var(--chrome-btn-bg);
+  color: var(--text);
+}
+.sheetPeek__chevron i{ width:16px; height:16px; }
+.sheetPeek:hover .sheetPeek__chevron{ background: var(--chrome-btn-bg-hover); }
+
 .sheet h2{
   margin: 0 0 4px;
   font-size: 19px;

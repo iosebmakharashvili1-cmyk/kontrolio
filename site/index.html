@@ -101,6 +101,13 @@
     <button class="sheet__close" id="sheetClose">დახურვა</button>
   </div>
 
+  <!-- გაჩერების "ჩაკეცილი" პანელი — ჩანს, როცა sheet დახურულია, მაგრამ
+       გაჩერება მაინც მონიშნულია რუკაზე. დაჭერით isev იხსნება sheet. -->
+  <button class="sheetPeek hidden" id="sheetPeek" type="button">
+    <span class="sheetPeek__name" id="sheetPeekName"></span>
+    <span class="sheetPeek__chevron"><i data-lucide="chevron-up"></i></span>
+  </button>
+
   <!-- Burger menu -->
   <div class="menuOverlay hidden" id="menuOverlay"></div>
   <div class="menuDrawer hidden" id="menuDrawer">
