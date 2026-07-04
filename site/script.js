@@ -504,7 +504,27 @@ const ROUTE_LINE_COLOR = {
   seasonal: "#a855f7",
 };
 
-function drawRouteLine(dirGeom, type, isSeasonal) {
+function lineMidpoint(coords) {
+  return coords[Math.floor((coords.length - 1) / 2)];
+}
+
+function drawRouteLabel(dirGeom, routeNum, type, isSeasonal) {
+  const color = isSeasonal ? ROUTE_LINE_COLOR.seasonal : ROUTE_LINE_COLOR[type];
+  const pos = lineMidpoint(dirGeom.coords);
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="routeLineLabel" style="background:${color}">${escapeHtml(routeNum)}</div>`,
+  });
+  L.marker(pos, {
+    icon,
+    pane: "routeHighlightPane",
+    interactive: false,
+    keyboard: false,
+    zIndexOffset: 500,
+  }).addTo(routeHighlightLayer);
+}
+
+function drawRouteLine(dirGeom, routeNum, type, isSeasonal) {
   const color = isSeasonal ? ROUTE_LINE_COLOR.seasonal : ROUTE_LINE_COLOR[type];
   const casing = L.polyline(dirGeom.coords, {
     pane: "routeHighlightPane",
@@ -525,6 +545,7 @@ function drawRouteLine(dirGeom, type, isSeasonal) {
   });
   casing.addTo(routeHighlightLayer);
   line.addTo(routeHighlightLayer);
+  drawRouteLabel(dirGeom, routeNum, type, isSeasonal);
 }
 
 function clearRouteHighlight() {
@@ -544,7 +565,7 @@ function highlightRoutesForStop(stop) {
       seen.add(rn);
       const route = ROUTES[rn];
       if (!route) return;
-      route.dirs.forEach((d) => drawRouteLine(d, route.type, route.seasonal));
+      route.dirs.forEach((d) => drawRouteLine(d, rn, route.type, route.seasonal));
     });
   };
   drawAll(stop.routesBus);
@@ -596,6 +617,8 @@ const btnClear = document.getElementById("btnClear");
 const sheetClose = document.getElementById("sheetClose");
 const sheetPeek = document.getElementById("sheetPeek");
 const sheetPeekName = document.getElementById("sheetPeekName");
+const sheetPeekMain = document.getElementById("sheetPeekMain");
+const sheetPeekDeselect = document.getElementById("sheetPeekDeselect");
 
 let activeStopId = null;
 
@@ -732,8 +755,12 @@ function closeSheet() {
   if (selectedStopId) showPeek(selectedStopId);
 }
 
-sheetPeek.addEventListener("click", () => {
+sheetPeekMain.addEventListener("click", () => {
   if (selectedStopId) openSheet(selectedStopId);
+});
+
+sheetPeekDeselect.addEventListener("click", () => {
+  deselectStop();
 });
 
 function setActionButtonsDisabled(disabled) {

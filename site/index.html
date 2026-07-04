@@ -102,11 +102,17 @@
   </div>
 
   <!-- გაჩერების "ჩაკეცილი" პანელი — ჩანს, როცა sheet დახურულია, მაგრამ
-       გაჩერება მაინც მონიშნულია რუკაზე. დაჭერით isev იხსნება sheet. -->
-  <button class="sheetPeek hidden" id="sheetPeek" type="button">
-    <span class="sheetPeek__name" id="sheetPeekName"></span>
-    <span class="sheetPeek__chevron"><i data-lucide="chevron-up"></i></span>
-  </button>
+       გაჩერება მაინც მონიშნულია რუკაზე. სახელზე/ისარზე დაჭერით isev
+       იხსნება sheet; ✕-ზე დაჭერით მონიშვნა საერთოდ იხსნება (deselect). -->
+  <div class="sheetPeek hidden" id="sheetPeek">
+    <button class="sheetPeek__main" id="sheetPeekMain" type="button">
+      <span class="sheetPeek__name" id="sheetPeekName"></span>
+      <span class="sheetPeek__chevron"><i data-lucide="chevron-up"></i></span>
+    </button>
+    <button class="sheetPeek__deselect" id="sheetPeekDeselect" type="button" title="მონიშვნის მოხსნა" aria-label="მონიშვნის მოხსნა">
+      <i data-lucide="x"></i>
+    </button>
+  </div>
 
   <!-- Burger menu -->
   <div class="menuOverlay hidden" id="menuOverlay"></div>
