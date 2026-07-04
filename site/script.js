@@ -515,19 +515,19 @@ function drawRouteLine(dirGeom, type, isSeasonal) {
   const casing = L.polyline(dirGeom.coords, {
     pane: "routeHighlightPane",
     color: "#ffffff",
-    weight: 7,
-    opacity: 0.9,
+    weight: 6,
+    opacity: 0.85,
     lineCap: "round",
     lineJoin: "round",
   });
   const line = L.polyline(dirGeom.coords, {
     pane: "routeHighlightPane",
     color,
-    weight: 4,
-    opacity: 0.95,
+    weight: 3.5,
+    opacity: 1,
     lineCap: "round",
     lineJoin: "round",
-    dashArray: isSeasonal ? "1 9" : null,
+    dashArray: isSeasonal ? "1 8" : null,
   });
   casing.addTo(routeHighlightLayer);
   line.addTo(routeHighlightLayer);
@@ -537,29 +537,51 @@ function clearRouteHighlight() {
   routeHighlightLayer.clearLayers();
 }
 
-/* ერთი აპკის ("callout") ბუშტში ჯგუფდება გაჩერების ყველა მარშრუტის
-   ნომერი, ტიპის მიხედვით ფერადი chip-ებით — ისე, როგორც sheet-ში.
-   ეს ჩანაცვლებს თითო-ხაზზე ცალკე ნომრის წაწერას, რაც ბევრი
-   გადამკვეთი მარშრუტის დროს არეულად გამოიყურებოდა. */
-function buildRouteCalloutHtml(stop) {
-  const groups = [
-    { cls: "bus", nums: stop.routesBus || [] },
-    { cls: "minibus", nums: stop.routesMinibus || [] },
-    { cls: "seasonal", nums: stop.routesSeasonal || [] },
-  ].filter((g) => g.nums.length);
-
-  const chips = groups
-    .flatMap((g) => g.nums.map((n) => `<span class="routeChip routeChip--${g.cls}">${escapeHtml(n)}</span>`))
-    .join("");
-  return `<div class="routeMapCallout">${chips}</div>`;
+/* ---------- Google Maps-ისებური მარშრუტის ნომრის badge ----------
+   თეთრი პაწაწინა "აბი" პირდაპირ მარშრუტის ხაზზე, ტიპის ფერით
+   შემოწერილი — ისე, როგორც Google Maps-ის ტრანზიტის ხაზები.
+   ის დაისმება გაჩერებასთან ახლოს, მაგრამ ცოტათი მის გასწვრივ
+   "გაწეული", რომ ერთმანეთზე არ დაეჯაჭვოს, თუ რამდენიმე მარშრუტი
+   ერთი და იმავე გზით გადის. */
+function nearestVertexIndex(coords, lat, lng) {
+  let bestIdx = 0;
+  let bestDistSq = Infinity;
+  for (let i = 0; i < coords.length; i++) {
+    const dLat = coords[i][0] - lat;
+    const dLng = coords[i][1] - lng;
+    const distSq = dLat * dLat + dLng * dLng;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
 }
 
-function drawRouteCallout(stop) {
+function pickBadgeSpot(route, lat, lng, spreadSlot) {
+  let best = null;
+  route.dirs.forEach((d) => {
+    if (d.coords.length < 2) return;
+    const idx = nearestVertexIndex(d.coords, lat, lng);
+    const dLat = d.coords[idx][0] - lat;
+    const dLng = d.coords[idx][1] - lng;
+    const distSq = dLat * dLat + dLng * dLng;
+    if (!best || distSq < best.distSq) best = { coords: d.coords, idx, distSq };
+  });
+  if (!best) return null;
+  const offset = 4 + spreadSlot * 3;
+  let idx = best.idx + offset;
+  if (idx >= best.coords.length) idx = Math.max(0, best.idx - offset);
+  return best.coords[idx];
+}
+
+function drawRouteBadge(pos, routeNum, type, isSeasonal) {
+  const color = isSeasonal ? ROUTE_LINE_COLOR.seasonal : ROUTE_LINE_COLOR[type];
   const icon = L.divIcon({
     className: "",
-    html: buildRouteCalloutHtml(stop),
+    html: `<div class="routeLineBadge" style="color:${color};border-color:${color}">${escapeHtml(routeNum)}</div>`,
   });
-  L.marker([stop.lat, stop.lng], {
+  L.marker(pos, {
     icon,
     pane: "routeCalloutPane",
     interactive: false,
@@ -575,19 +597,24 @@ function highlightRoutesForStop(stop) {
   clearRouteHighlight();
   if (typeof ROUTES === "undefined") return;
   const seen = new Set();
-  const drawAll = (routeNums) => {
-    (routeNums || []).forEach((rn) => {
-      if (seen.has(rn)) return;
-      seen.add(rn);
-      const route = ROUTES[rn];
-      if (!route) return;
-      route.dirs.forEach((d) => drawRouteLine(d, route.type, route.seasonal));
-    });
-  };
-  drawAll(stop.routesBus);
-  drawAll(stop.routesMinibus);
-  drawAll(stop.routesSeasonal);
-  drawRouteCallout(stop);
+  const allRouteNums = [
+    ...(stop.routesBus || []),
+    ...(stop.routesMinibus || []),
+    ...(stop.routesSeasonal || []),
+  ];
+
+  let slot = 0;
+  allRouteNums.forEach((rn) => {
+    if (seen.has(rn)) return;
+    seen.add(rn);
+    const route = ROUTES[rn];
+    if (!route) return;
+    route.dirs.forEach((d) => drawRouteLine(d, route.type, route.seasonal));
+
+    const pos = pickBadgeSpot(route, stop.lat, stop.lng, slot);
+    if (pos) drawRouteBadge(pos, rn, route.type, route.seasonal);
+    slot += 1;
+  });
 }
 
 function selectStop(stopId) {
