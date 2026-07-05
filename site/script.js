@@ -521,6 +521,7 @@ function drawRouteLine(dirGeom, type, isSeasonal) {
     opacity: 0.9,
     lineCap: "round",
     lineJoin: "round",
+    interactive: false,
   });
   const line = L.polyline(dirGeom.coords, {
     pane: "routeHighlightPane",
@@ -530,6 +531,7 @@ function drawRouteLine(dirGeom, type, isSeasonal) {
     lineCap: "round",
     lineJoin: "round",
     dashArray: isSeasonal ? "1 7" : null,
+    interactive: false,
   });
   halo.addTo(routeHighlightLayer);
   line.addTo(routeHighlightLayer);
