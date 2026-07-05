@@ -488,32 +488,35 @@ html, body{
   width:14px; height:3px; border-radius:2px; flex:none;
 }
 
-/* ---------- გაჩერების მარშრუტების ერთიანი "callout" რუკაზე ----------
-   ცალკეული ხაზის ნომრის წაწერის ნაცვლად, ყველა მარშრუტი ერთ
-   ბუშტში ჯგუფდება, არჩეული გაჩერების თავზე — routeChip-ების
-   იგივე ფერებით (sheet-ის chip-ებთან თანმიმდევრულობისთვის). */
-.routeMapCallout{
-  position:relative;
-  transform: translate(-50%, calc(-100% - 26px));
-  display:flex; flex-wrap:wrap; gap:5px;
-  max-width: 200px;
-  padding: 7px 8px;
-  background: var(--surface);
-  border-radius: 12px;
-  box-shadow: 0 5px 16px rgba(0,0,0,0.3);
-  pointer-events:none;
+/* ---------- Google Maps-ისებური მარშრუტის ნომრის "აბი" ----------
+   პატარა rounded-pill, პირდაპირ მარშრუტის ხაზთან, ფერადი
+   ბექგრაუნდით (ტიპის მიხედვით) და თეთრი bold ტექსტით — ისე,
+   როგორც Google Maps-ის ტრანზიტ-ხაზების ნომრები გამოიყურება.
+   თუ რამდენიმე მარშრუტი ერთი და იმავე გზით გადის, ისინი ერთ
+   თეთრ აბში ჯგუფდება ("routeMapBadge--mixed"), ცალ-ცალკე
+   ფერადი ციფრებით. */
+.routeMapBadge{
+  transform: translate(-50%, -50%);
+  display:inline-flex; align-items:center; gap:3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1.5px solid;
+  color:#fff;
+  font-size: 11.5px; font-weight:800;
+  line-height:1.3;
+  white-space:nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
 }
-.routeMapCallout::after{
-  content:"";
-  position:absolute; left:50%; bottom:-6px;
-  transform:translateX(-50%);
-  border-left:6px solid transparent;
-  border-right:6px solid transparent;
-  border-top:6px solid var(--surface);
+.routeMapBadge--mixed{
+  box-shadow: 0 2px 6px rgba(0,0,0,0.28);
 }
-.routeMapCallout .routeChip{
-  font-size: 11px;
-  padding: 3px 7px;
+.routeMapBadge--mixed .routeMapBadge__num{
+  font-weight:800;
+}
+.routeMapBadge__sep{
+  color: var(--grey);
+  font-weight:400;
+  margin: 0 1px;
 }
 
 /* ---------- Arrivals ---------- */
