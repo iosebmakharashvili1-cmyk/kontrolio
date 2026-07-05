@@ -498,6 +498,7 @@ function refreshMarker(stopId) {
    ნომრები ერთ აბშივ ჯგუფდება — ცალკეული ხაზები აღარ ერევა.
    მონიშვნა რჩება მანამ, სანამ სხვა გაჩერებას არ ავირჩევთ. ----- */
 let selectedStopId = null;
+let visibleRouteNums = new Set();
 const routeHighlightLayer = L.layerGroup([], { pane: "routeHighlightPane" }).addTo(map);
 
 const ROUTE_LINE_COLOR = {
@@ -535,27 +536,34 @@ function clearRouteHighlight() {
   routeHighlightLayer.clearLayers();
 }
 
+function stopRouteNums(stop) {
+  const seen = new Set();
+  const out = [];
+  [...(stop.routesBus || []), ...(stop.routesMinibus || []), ...(stop.routesSeasonal || [])].forEach(
+    (rn) => {
+      if (!seen.has(rn)) {
+        seen.add(rn);
+        out.push(rn);
+      }
+    }
+  );
+  return out;
+}
+
 /* ერთი route_num-ის ორივე მიმართულება ვხატავთ — stops.js-ში
    გაჩერებები უკვე ორივე-მიმართულებიანი წყვილებია გაერთიანებული,
    ამიტომ ეს არქიტექტურულად თანმიმდევრულია.
    ნომრები განზრახ აღარ იწერება ხაზებზე — 5-8 გადამკვეთი
    მარშრუტის დროს ტექსტი ყოველთვის გადატვირთული გამოიყურება.
-   რუკა სუფთა ფერადი ხაზებით რჩება (ტიპი ფერით იკითხება),
-   ზუსტი ნომრები კი უკვე ჩანს sheet/peek-ის chip-ებში. */
+   რუკა სუფთა ფერადი ხაზებით რჩება (ტიპი ფერით იკითხება), ზუსტი
+   ნომრები ჩანს sheet-ის chip-ებში — chip-ზე დაჭერით კონკრეტული
+   მარშრუტი ერთფრადად ირთვება/ითიშება რუკაზე. */
 function highlightRoutesForStop(stop) {
   clearRouteHighlight();
   if (typeof ROUTES === "undefined") return;
 
-  const seen = new Set();
-  const allRouteNums = [
-    ...(stop.routesBus || []),
-    ...(stop.routesMinibus || []),
-    ...(stop.routesSeasonal || []),
-  ];
-
-  allRouteNums.forEach((rn) => {
-    if (seen.has(rn)) return;
-    seen.add(rn);
+  stopRouteNums(stop).forEach((rn) => {
+    if (!visibleRouteNums.has(rn)) return;
     const route = ROUTES[rn];
     if (!route) return;
     route.dirs.forEach((d) => drawRouteLine(d, route.type, route.seasonal));
@@ -566,6 +574,8 @@ function selectStop(stopId) {
   const prev = selectedStopId;
   if (prev === stopId) return;
   selectedStopId = stopId;
+  const stop = STOPS_BY_ID[stopId];
+  visibleRouteNums = stop ? new Set(stopRouteNums(stop)) : new Set();
   if (prev) refreshMarker(prev);
   if (stopId) refreshMarker(stopId);
 }
@@ -583,9 +593,19 @@ function renderRouteMapNote(stop) {
   const el = document.getElementById("sheetRouteMapNote");
   if (!el) return;
   const hasSeasonal = (stop.routesSeasonal || []).length > 0;
-  el.innerHTML = hasSeasonal
-    ? `<span class="routeMapNote__swatch" style="background:${ROUTE_LINE_COLOR.seasonal}"></span>რუკაზე ნაჩვენებია ყველა მარშრუტი — წყვეტილი ხაზი სეზონურია (ეროვნული გამოცდები)`
-    : `მარშრუტები ნაჩვენებია რუკაზე`;
+  const seasonalHint = hasSeasonal
+    ? `<span class="routeMapNote__swatch" style="background:${ROUTE_LINE_COLOR.seasonal}"></span>წყვეტილი ხაზი სეზონურია (ეროვნული გამოცდები). `
+    : "";
+  el.innerHTML = `${seasonalHint}დააჭირეთ მარშრუტს რუკაზე ჩასართავად/გამოსართავად — <button type="button" class="routeMapNote__reset" id="sheetRouteShowAll">ყველას ჩვენება</button>`;
+
+  const resetBtn = document.getElementById("sheetRouteShowAll");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      visibleRouteNums = new Set(stopRouteNums(stop));
+      highlightRoutesForStop(stop);
+      renderRouteChips(stop);
+    });
+  }
 }
 
 /* ცარიელ ადგილას დაჭერისას მონიშვნა იხსნება */
@@ -652,19 +672,32 @@ function buildCaptionText(report) {
 }
 
 function renderRouteChips(stop) {
-  const busChips = (stop.routesBus || []).map(
-    (r) => `<span class="routeChip routeChip--bus">${escapeHtml(r)}</span>`
-  );
-  const miniChips = (stop.routesMinibus || []).map(
-    (r) => `<span class="routeChip routeChip--minibus">${escapeHtml(r)}</span>`
-  );
-  const seasonalChips = (stop.routesSeasonal || []).map(
-    (r) => `<span class="routeChip routeChip--seasonal" title="სეზონური — ეროვნული გამოცდები">${escapeHtml(r)}</span>`
+  const buildChip = (r, cls, extraAttrs = "") => {
+    const active = visibleRouteNums.has(r);
+    return `<button type="button" class="routeChip routeChip--${cls}${active ? "" : " routeChip--off"}" data-route="${escapeHtml(r)}" ${extraAttrs}>${escapeHtml(r)}</button>`;
+  };
+  const busChips = (stop.routesBus || []).map((r) => buildChip(r, "bus"));
+  const miniChips = (stop.routesMinibus || []).map((r) => buildChip(r, "minibus"));
+  const seasonalChips = (stop.routesSeasonal || []).map((r) =>
+    buildChip(r, "seasonal", `title="სეზონური — ეროვნული გამოცდები"`)
   );
   const all = [...busChips, ...miniChips, ...seasonalChips];
   sheetRouteChips.innerHTML = all.length
     ? all.join("")
     : `<span class="routeChip routeChip--empty">მარშრუტი უცნობია</span>`;
+
+  sheetRouteChips.querySelectorAll("button.routeChip[data-route]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const rn = btn.dataset.route;
+      if (visibleRouteNums.has(rn)) {
+        visibleRouteNums.delete(rn);
+      } else {
+        visibleRouteNums.add(rn);
+      }
+      btn.classList.toggle("routeChip--off", !visibleRouteNums.has(rn));
+      highlightRoutesForStop(stop);
+    });
+  });
 }
 
 function renderArrivalsList(arrivals, stop) {
