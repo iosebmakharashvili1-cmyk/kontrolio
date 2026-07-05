@@ -251,12 +251,6 @@ map.createPane("routeHighlightPane");
 map.getPane("routeHighlightPane").style.zIndex = 450;
 map.getPane("routeHighlightPane").style.pointerEvents = "none";
 
-/* callout ბუშტმა მარკერების პანელზეც კი მაღლა უნდა "გამოიხედოს",
-   რომ ახლომდებარე გაჩერების აიქონმა არ დაფაროს */
-map.createPane("routeCalloutPane");
-map.getPane("routeCalloutPane").style.zIndex = 650;
-map.getPane("routeCalloutPane").style.pointerEvents = "none";
-
 /* ---------- Tile layers ---------- */
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
@@ -541,110 +535,18 @@ function clearRouteHighlight() {
   routeHighlightLayer.clearLayers();
 }
 
-/* ---------- ნომრის "აბის" ადგილის შერჩევა ----------
-   თითოეული მარშრუტისთვის ვპოულობთ გაჩერებასთან უახლოეს წერტილს
-   და ცოტათი "ვსრიალებთ" ხაზის გასწვრივ (რამდენიმე ვერტექსით),
-   რომ აბი პირდაპირ გაჩერების აიქონზე არ ეხვეოდეს. */
-function nearestVertexIndex(coords, lat, lng) {
-  let bestIdx = 0;
-  let bestDistSq = Infinity;
-  for (let i = 0; i < coords.length; i++) {
-    const dLat = coords[i][0] - lat;
-    const dLng = coords[i][1] - lng;
-    const distSq = dLat * dLat + dLng * dLng;
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestIdx = i;
-    }
-  }
-  return bestIdx;
-}
-
-function badgeAnchorForRoute(route, lat, lng) {
-  let best = null;
-  route.dirs.forEach((d) => {
-    if (d.coords.length < 2) return;
-    const idx = nearestVertexIndex(d.coords, lat, lng);
-    const dLat = d.coords[idx][0] - lat;
-    const dLng = d.coords[idx][1] - lng;
-    const distSq = dLat * dLat + dLng * dLng;
-    if (!best || distSq < best.distSq) best = { coords: d.coords, idx, distSq };
-  });
-  if (!best) return null;
-  const step = 5;
-  let idx = best.idx + step;
-  if (idx >= best.coords.length) idx = Math.max(0, best.idx - step);
-  return best.coords[idx];
-}
-
-/* ---------- ერთი გზით გამავალი მარშრუტების დაჯგუფება ----------
-   თუ ორი მარშრუტის აბის წერტილები ახლოსაა (~35მ), ესეიგი
-   ერთსა და იმავე ქუჩით გადიან გაჩერებასთან — ვაერთიანებთ ერთ
-   აბში, Google Maps-ის ტრანზიტ-ხაზების სტილში. */
-const CLUSTER_DEG = 0.00035; // ≈ 35მ განედის მიმართულებით
-
-function clusterRouteBadges(entries) {
-  const clusters = [];
-  entries.forEach((entry) => {
-    const existing = clusters.find(
-      (c) =>
-        Math.abs(c.pos[0] - entry.pos[0]) < CLUSTER_DEG &&
-        Math.abs(c.pos[1] - entry.pos[1]) < CLUSTER_DEG
-    );
-    if (existing) {
-      existing.items.push(entry);
-      existing.pos = [
-        (existing.pos[0] * (existing.items.length - 1) + entry.pos[0]) / existing.items.length,
-        (existing.pos[1] * (existing.items.length - 1) + entry.pos[1]) / existing.items.length,
-      ];
-    } else {
-      clusters.push({ pos: entry.pos, items: [entry] });
-    }
-  });
-  return clusters;
-}
-
-function drawRouteBadgeCluster(cluster) {
-  const types = new Set(cluster.items.map((it) => (it.seasonal ? "seasonal" : it.type)));
-  const mixed = types.size > 1;
-  const solo = !mixed ? ROUTE_LINE_COLOR[[...types][0]] : null;
-
-  const inner = cluster.items
-    .map((it) => {
-      const color = it.seasonal ? ROUTE_LINE_COLOR.seasonal : ROUTE_LINE_COLOR[it.type];
-      return mixed
-        ? `<span class="routeMapBadge__num" style="color:${color}">${escapeHtml(it.routeNum)}</span>`
-        : `<span class="routeMapBadge__num">${escapeHtml(it.routeNum)}</span>`;
-    })
-    .join(`<span class="routeMapBadge__sep">·</span>`);
-
-  const style = mixed
-    ? `background:#ffffff;border-color:#d8d8de;`
-    : `background:${solo};border-color:${solo};`;
-  const cls = mixed ? "routeMapBadge routeMapBadge--mixed" : "routeMapBadge";
-
-  const icon = L.divIcon({
-    className: "",
-    html: `<div class="${cls}" style="${style}">${inner}</div>`,
-  });
-  L.marker(cluster.pos, {
-    icon,
-    pane: "routeCalloutPane",
-    interactive: false,
-    keyboard: false,
-    zIndexOffset: 800,
-  }).addTo(routeHighlightLayer);
-}
-
 /* ერთი route_num-ის ორივე მიმართულება ვხატავთ — stops.js-ში
    გაჩერებები უკვე ორივე-მიმართულებიანი წყვილებია გაერთიანებული,
-   ამიტომ ეს არქიტექტურულად თანმიმდევრულია. */
+   ამიტომ ეს არქიტექტურულად თანმიმდევრულია.
+   ნომრები განზრახ აღარ იწერება ხაზებზე — 5-8 გადამკვეთი
+   მარშრუტის დროს ტექსტი ყოველთვის გადატვირთული გამოიყურება.
+   რუკა სუფთა ფერადი ხაზებით რჩება (ტიპი ფერით იკითხება),
+   ზუსტი ნომრები კი უკვე ჩანს sheet/peek-ის chip-ებში. */
 function highlightRoutesForStop(stop) {
   clearRouteHighlight();
   if (typeof ROUTES === "undefined") return;
 
   const seen = new Set();
-  const badgeEntries = [];
   const allRouteNums = [
     ...(stop.routesBus || []),
     ...(stop.routesMinibus || []),
@@ -657,12 +559,7 @@ function highlightRoutesForStop(stop) {
     const route = ROUTES[rn];
     if (!route) return;
     route.dirs.forEach((d) => drawRouteLine(d, route.type, route.seasonal));
-
-    const pos = badgeAnchorForRoute(route, stop.lat, stop.lng);
-    if (pos) badgeEntries.push({ pos, routeNum: rn, type: route.type, seasonal: route.seasonal });
   });
-
-  clusterRouteBadges(badgeEntries).forEach(drawRouteBadgeCluster);
 }
 
 function selectStop(stopId) {
