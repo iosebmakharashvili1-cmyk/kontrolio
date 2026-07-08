@@ -5,17 +5,21 @@
      { reports: { [stopId]: {status, ts, reportDate, confirmations} },
        activity: [ {stopName, status, ts, reportDate}, ... ],
        dailyCounts: { [stopId]: N },
-       dailyCountsDate: "YYYY-MM-DD" }
+       dailyCountsDate: "YYYY-MM-DD",
+       scores: { [sid]: N },        ← მუდმივი, დღიურად არ იშლება
+       nicknames: { [sid]: "სახელი" } }
    in-memory ქეშით წასაკითხი სიჩქარისთვის და ატომური ჩაწერით
    (temp ფაილი + rename).
 
    "სერვის დღე" იშლება ყოველდღე ღამის 00:00 საათზე (თბილისის დროით).
 
    ენდპოინტები:
-   GET  /api/reports   -> { stopId: {status, ts, confirmCount, viewerCount, reportsToday}, ... }
-   POST /api/reports   -> { stopId, status, sid } ქმნის/ანახლებს ჩანაწერს + activity-ს + dailyCounts-ს
-   GET  /api/activity  -> [ {stopName, status, ts}, ... ]  (უახლესი წინ, მხოლოდ დღევანდელი)
-   GET  /api/health    -> { ok: true }
+   GET  /api/reports     -> { stopId: {status, ts, confirmCount, viewerCount, reportsToday}, ... }
+   POST /api/reports     -> { stopId, status, sid } ქმნის/ანახლებს ჩანაწერს + activity-ს + dailyCounts-ს + ქულებს
+   GET  /api/activity    -> [ {stopName, status, ts}, ... ]  (უახლესი წინ, მხოლოდ დღევანდელი)
+   GET  /api/leaderboard -> { top: [...], me: {...} }
+   POST /api/nickname    -> { sid, nickname } → { nickname }
+   GET  /api/health      -> { ok: true }
    ============================================================ */
 
 const express = require("express");
@@ -44,7 +48,14 @@ try {
 }
 
 /* ---------- in-memory state, დისკზე სარეზერვო ასლით ---------- */
-let store = { reports: {}, activity: [], dailyCounts: {}, dailyCountsDate: null };
+let store = {
+  reports: {},
+  activity: [],
+  dailyCounts: {},
+  dailyCountsDate: null,
+  scores: {},
+  nicknames: {},
+};
 
 function loadStore() {
   try {
@@ -55,11 +66,20 @@ function loadStore() {
         activity: Array.isArray(parsed.activity) ? parsed.activity : [],
         dailyCounts: parsed.dailyCounts || {},
         dailyCountsDate: parsed.dailyCountsDate || null,
+        scores: parsed.scores || {},
+        nicknames: parsed.nicknames || {},
       };
     }
   } catch (err) {
     console.error("store.json წაკითხვა ჩავარდა, ვაგრძელებთ ცარიელით:", err.message);
-    store = { reports: {}, activity: [], dailyCounts: {}, dailyCountsDate: null };
+    store = {
+      reports: {},
+      activity: [],
+      dailyCounts: {},
+      dailyCountsDate: null,
+      scores: {},
+      nicknames: {},
+    };
   }
 }
 
@@ -187,6 +207,10 @@ app.use((req, res, next) => {
 
 const VALID_STATUSES = new Set(["inspector", "clear"]);
 
+/* მხოლოდ ქართული/ლათინური ასოები, ციფრები, space, ზოგიერთი სიმბოლო —
+   HTML/script injection-ის საშუალება საერთოდ არ რჩება. */
+const NICKNAME_PATTERN = /^[a-zA-Zა-ჰ0-9 _\-.!?★☆]{1,20}$/u;
+
 /* ---------- Rate limiting ----------
    ორ ფენად: ზოგადი ჭერი ყველა /api-ზე (ბოროტმოქმედული scripting-ის წინააღმდეგ),
    და მკაცრი ჭერი მხოლოდ POST /api/reports-ზე (spam-ი ცრუ შეტყობინებებით). */
@@ -288,6 +312,17 @@ app.post("/api/reports", reportsLimiter, (req, res) => {
   }
   if (safeSid) confirmations[safeSid] = ts;
 
+  /* "პირველობის" ქულა — მხოლოდ მაშინ, როცა ეს კონკრეტული report
+     აქცევს გაჩერებას "თავისუფლიდან/უცნობიდან" → "კონტროლიორზე".
+     განმეორებითი დადასტურება ან "თავისუფალია"-ს მონიშვნა ქულას
+     არ იძლევა. ქულა მუდმივია — store.scores არასდროს იშლება
+     cleanupOldData-ში, დღიური store.reports-ისგან განსხვავებით. */
+  let scored = false;
+  if (statusChanged && status === "inspector" && safeSid) {
+    store.scores[safeSid] = (store.scores[safeSid] || 0) + 1;
+    scored = true;
+  }
+
   store.reports[stopId] = { status, ts, reportDate, confirmations };
 
   if (store.dailyCountsDate !== reportDate) {
@@ -308,6 +343,7 @@ app.post("/api/reports", reportsLimiter, (req, res) => {
     ts,
     confirmCount: confirmCount(store.reports[stopId]),
     reportsToday: store.dailyCounts[stopId],
+    scored,
   });
 });
 
@@ -316,6 +352,54 @@ app.get("/api/activity", (req, res) => {
   const todays = store.activity.filter((a) => a.reportDate === current);
   const recent = todays.slice(-100).reverse(); // უახლესი წინ
   res.json(recent.map((a) => ({ stopName: a.stopName, status: a.status, ts: a.ts })));
+});
+
+/* ---------- ლიდერბორდი (ანონიმური, მუდმივი) ----------
+   ქულა ეძლევა მხოლოდ იმას, ვინც პირველი აქცევს გაჩერებას
+   "კონტროლიორზე" (იხ. POST /api/reports ზემოთ). Nickname-ს
+   მომხმარებელი თვითონ ირჩევს (POST /api/nickname). */
+app.get("/api/leaderboard", (req, res) => {
+  const sid = typeof req.query.sid === "string" ? req.query.sid.slice(0, 64) : null;
+
+  const entries = Object.entries(store.scores)
+    .map(([s, score]) => ({ sid: s, score, nickname: store.nicknames[s] || null }))
+    .sort((a, b) => b.score - a.score);
+
+  const top = entries.slice(0, 20).map((e, i) => ({
+    rank: i + 1,
+    nickname: e.nickname || "ანონიმური",
+    score: e.score,
+  }));
+
+  let me = null;
+  if (sid) {
+    const myScore = store.scores[sid] || 0;
+    const myNickname = store.nicknames[sid] || null;
+    const inTop = entries.findIndex((e) => e.sid === sid);
+    me = { score: myScore, nickname: myNickname, rank: inTop >= 0 ? inTop + 1 : null };
+  }
+
+  res.json({ top, me });
+});
+
+app.post("/api/nickname", reportsLimiter, (req, res) => {
+  const { sid, nickname } = req.body || {};
+  const safeSid = typeof sid === "string" ? sid.slice(0, 64) : null;
+  if (!safeSid) {
+    return res.status(400).json({ error: "sid is required" });
+  }
+  if (typeof nickname !== "string" || !nickname.trim()) {
+    return res.status(400).json({ error: "nickname is required" });
+  }
+  const trimmed = nickname.trim().slice(0, 20);
+  if (!NICKNAME_PATTERN.test(trimmed)) {
+    return res.status(400).json({
+      error: "მეტსახელი უნდა იყოს 1-20 სიმბოლო, მხოლოდ ასოები/ციფრები/space",
+    });
+  }
+  store.nicknames[safeSid] = trimmed;
+  persistStore();
+  res.json({ nickname: trimmed });
 });
 
 app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
