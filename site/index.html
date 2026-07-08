@@ -100,19 +100,6 @@
     <button class="sheet__close" id="sheetClose">დახურვა</button>
   </div>
 
-  <!-- გაჩერების "ჩაკეცილი" პანელი — ჩანს, როცა sheet დახურულია, მაგრამ
-       გაჩერება მაინც მონიშნულია რუკაზე. სახელზე/ისარზე დაჭერით isev
-       იხსნება sheet; ✕-ზე დაჭერით მონიშვნა საერთოდ იხსნება (deselect). -->
-  <div class="sheetPeek hidden" id="sheetPeek">
-    <button class="sheetPeek__main" id="sheetPeekMain" type="button">
-      <span class="sheetPeek__name" id="sheetPeekName"></span>
-      <span class="sheetPeek__chevron"><i data-lucide="chevron-up"></i></span>
-    </button>
-    <button class="sheetPeek__deselect" id="sheetPeekDeselect" type="button" title="მონიშვნის მოხსნა" aria-label="მონიშვნის მოხსნა">
-      <i data-lucide="x"></i>
-    </button>
-  </div>
-
   <!-- Burger menu -->
   <div class="menuOverlay hidden" id="menuOverlay"></div>
   <div class="menuDrawer hidden" id="menuDrawer">
@@ -147,6 +134,22 @@
         <div class="menuDrawer__sectionIcon"><i data-lucide="users"></i></div>
         <h3 class="menuDrawer__sectionTitle">საზოგადოება დღეს</h3>
         <p class="menuDrawer__text" id="communityStats">იტვირთება...</p>
+      </div>
+
+      <div class="menuDrawer__divider"></div>
+
+      <div class="menuDrawer__section" id="leaderboardSection">
+        <div class="menuDrawer__sectionIcon"><i data-lucide="trophy"></i></div>
+        <h3 class="menuDrawer__sectionTitle">ტოპ კონტრიბუტორები</h3>
+        <p class="menuDrawer__text leaderboardHint">
+          ქულა ეძლევა მას, ვინც <strong>პირველი</strong> შეამჩნევს კონტროლიორს
+          თითოეულ გაჩერებაზე. ანონიმური და უფასოა — მხოლოდ თანამებრძოლების
+          სანახავად 🏆
+        </p>
+        <div class="leaderboardList" id="leaderboardList">
+          <p class="leaderboardEmpty">იტვირთება...</p>
+        </div>
+        <p class="menuDrawer__text leaderboardMe" id="leaderboardMe"></p>
       </div>
 
       <div class="menuDrawer__divider"></div>
@@ -235,9 +238,35 @@
     </div>
   </div>
 
+  <!-- Nickname prompt (ლიდერბორდისთვის, პირველი ქულის მიღების შემდეგ) -->
+  <div class="overlay hidden" id="nicknameOverlay"></div>
+  <div class="sheet hidden" id="nicknameModal">
+    <div class="sheet__handle"></div>
+    <h2>🏆 ქულა მიიღე!</h2>
+    <p class="sheet__caption">
+      შენ იყავი პირველი, ვინც ეს კონტროლიორი შეამჩნია. აირჩიე მეტსახელი,
+      რომ ტოპ კონტრიბუტორების სიაში საკუთარი თავი იცნო — სრულიად
+      არასავალდებულოა.
+    </p>
+    <input
+      type="text"
+      id="nicknameInput"
+      class="nicknameInput"
+      placeholder="მაგ. მოგზაური97"
+      maxlength="20"
+      autocomplete="off"
+    />
+    <p class="nicknameError" id="nicknameError"></p>
+    <div class="sheet__actions">
+      <button class="reportBtn reportBtn--clear" id="nicknameSave">შენახვა</button>
+    </div>
+    <button class="sheet__close" id="nicknameSkip">არა, მადლობა</button>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="stops.js"></script>
+  <script src="routes.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

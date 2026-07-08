@@ -9,8 +9,6 @@
   --grey-soft: #e7e7ea;
   --ring: #f4f3ee;
   --user-loc: #8b5cf6;
-  --seasonal: #a855f7;
-  --seasonal-soft: #f0e3fe;
   --shadow: 0 12px 30px rgba(20,25,43,0.25);
   --radius: 18px;
 
@@ -254,21 +252,6 @@ html, body{
   animation: pulseMarker 1.6s infinite;
 }
 
-.stopMarker--selected{
-  transform: scale(1.22);
-  box-shadow:
-    0 0 0 4px rgba(255,255,255,0.9),
-    0 0 0 7px var(--bus-blue),
-    0 3px 10px rgba(0,0,0,0.4);
-  z-index: 10000 !important;
-}
-[data-theme="dark"] .stopMarker--selected{
-  box-shadow:
-    0 0 0 4px rgba(26,29,36,0.95),
-    0 0 0 7px var(--bus-blue),
-    0 3px 10px rgba(0,0,0,0.55);
-}
-
 @keyframes pulseMarker{
   0%   { box-shadow: 0 0 0 0 rgba(228,72,60,0.55), 0 2px 6px rgba(0,0,0,0.35); }
   70%  { box-shadow: 0 0 0 14px rgba(228,72,60,0), 0 2px 6px rgba(0,0,0,0.35); }
@@ -371,64 +354,6 @@ html, body{
   flex-shrink:0;
 }
 
-/* ---------- Collapsed stop peek (sheet-ის ჩაკეცილი მდგომარეობა) ---------- */
-.sheetPeek{
-  position:absolute; left:0; right:0; bottom:0; z-index:940;
-  display:flex; align-items:center; gap:8px;
-  width:100%; max-width:480px;
-  margin:0 auto;
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)) 20px;
-  background: var(--surface);
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -6px 20px rgba(0,0,0,0.22);
-  transform: translateY(0);
-  visibility: visible;
-  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.3s;
-}
-.sheetPeek.hidden{
-  transform: translateY(105%);
-  visibility: hidden;
-}
-.sheetPeek__main{
-  flex:1; min-width:0;
-  display:flex; align-items:center; gap:10px;
-  border:none; background:none; padding:6px 0;
-  font-family: inherit;
-  color: var(--text);
-  cursor: pointer;
-}
-.sheetPeek__name{
-  flex:1;
-  text-align:left;
-  font-size:15px; font-weight:700;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.sheetPeek__chevron{
-  flex:none;
-  display:flex; align-items:center; justify-content:center;
-  width:26px; height:26px; border-radius:50%;
-  background: var(--chrome-btn-bg);
-  color: var(--text);
-}
-.sheetPeek__chevron i{ width:16px; height:16px; }
-.sheetPeek__main:hover .sheetPeek__chevron{ background: var(--chrome-btn-bg-hover); }
-
-.sheetPeek__deselect{
-  flex:none;
-  display:flex; align-items:center; justify-content:center;
-  width:34px; height:34px; border-radius:50%;
-  border:none;
-  background: var(--chrome-btn-bg);
-  color: var(--grey);
-  cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-.sheetPeek__deselect i{ width:17px; height:17px; }
-.sheetPeek__deselect:hover{
-  background: var(--red-soft);
-  color: var(--red);
-}
-
 .sheet h2{
   margin: 0 0 4px;
   font-size: 19px;
@@ -468,14 +393,32 @@ html, body{
   border-radius: 7px;
   font-size: 12.5px; font-weight:700;
   color: #fff;
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+  user-select: none;
 }
+.routeChip:hover{ opacity: 0.85; }
+.routeChip:active{ transform: scale(0.94); }
 .routeChip--bus{ background: var(--green); }
 .routeChip--minibus{ background: var(--bus-blue); }
-.routeChip--seasonal{ background: var(--seasonal); }
+.routeChip--seasonal{ background: #9333ea; }
 .routeChip--empty{
   background: var(--grey-soft);
   color: var(--grey);
   font-weight:500;
+  cursor: default;
+}
+.routeChip--empty:hover{ opacity: 1; }
+
+/* ---------- მარშრუტების ხაზების tooltip რუკაზე ---------- */
+.leaflet-tooltip{
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: none;
+  box-shadow: var(--shadow);
 }
 
 /* ---------- Arrivals ---------- */
@@ -898,6 +841,79 @@ html, body{
   line-height: 1.45;
 }
 .contribToday:empty{ display:none; }
+
+/* ---------- ლიდერბორდი ---------- */
+.leaderboardHint{
+  font-size: 12.5px;
+  color: var(--grey);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.leaderboardList{
+  display:flex; flex-direction:column; gap:6px;
+  margin-bottom: 10px;
+}
+.leaderboardItem{
+  display:flex; align-items:center; gap:10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--grey-soft);
+}
+.leaderboardItem__rank{
+  min-width: 28px;
+  font-weight:700;
+  font-size: 14px;
+  text-align:center;
+  color: var(--text);
+}
+.leaderboardItem__name{
+  flex:1; min-width:0;
+  font-size: 13.5px;
+  color: var(--text);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.leaderboardItem__score{
+  font-weight:700;
+  font-size: 13.5px;
+  color: var(--bus-blue);
+}
+.leaderboardEmpty{
+  color: var(--grey);
+  font-size: 13px;
+  text-align:center;
+  padding: 12px 0;
+}
+.leaderboardMe{
+  font-size: 12.5px;
+  font-weight:600;
+  color: var(--text);
+  background: var(--green-soft);
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+.leaderboardMe:empty{ display:none; }
+
+/* ---------- Nickname prompt ---------- */
+.nicknameInput{
+  width:100%;
+  border: 1.5px solid var(--grey-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  margin-bottom: 6px;
+}
+.nicknameInput:focus{ outline: 2px solid var(--bus-blue); border-color: transparent; }
+.nicknameError{
+  min-height: 16px;
+  font-size: 12px;
+  color: var(--red);
+  margin: 0 0 12px;
+}
 
 /* ---------- Activity toggle ---------- */
 .activityToggleBtn{ display:none; }

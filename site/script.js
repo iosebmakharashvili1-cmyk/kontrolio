@@ -26,14 +26,18 @@ const API_BASE = (() => {
 let reportsCache = {};
 
 /* ---------- სესიის იდენტიფიკატორი ----------
-   ერთი და იგივე sid გამოიყენება heartbeat-ისთვის (ონლაინ მთვლელი) და
-   report-ების დადასტურების დათვლისთვის. sessionStorage-ში ცოცხლობს
-   მხოლოდ ტაბის გახსნის განმავლობაში — მუდმივი იდენტიფიკატორი არაა. */
+   ერთი და იგივე sid გამოიყენება heartbeat-ისთვის (ონლაინ მთვლელი),
+   report-ების დადასტურების დათვლისთვის, და ლიდერბორდის ქულებისთვის.
+   localStorage-ში ინახება (არა sessionStorage), რომ ტაბის დახურვის
+   შემდეგაც იგივე "ანონიმური პიროვნება" დარჩეს — წინააღმდეგ
+   შემთხვევაში ქულები ყოველ ვიზიტზე თავიდან დაიწყებოდა. ეს მაინც
+   მხოლოდ შემთხვევითი სტრინგია ამ მოწყობილობაზე/ბრაუზერზე — არ არის
+   ანგარიში, არ არის დაკავშირებული პირად ინფორმაციასთან. */
 function getSid() {
-  let sid = sessionStorage.getItem("_kontrolio_sid");
+  let sid = localStorage.getItem("_kontrolio_sid");
   if (!sid) {
     sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    sessionStorage.setItem("_kontrolio_sid", sid);
+    localStorage.setItem("_kontrolio_sid", sid);
   }
   return sid;
 }
@@ -76,7 +80,32 @@ async function setReport(stopId, status, stopName) {
     reportsToday: saved.reportsToday,
     viewerCount: (reportsCache[stopId] && reportsCache[stopId].viewerCount) || 0,
   };
-  return reportsCache[stopId];
+  return { report: reportsCache[stopId], scored: !!saved.scored };
+}
+
+/* ---------- ლიდერბორდი (ანონიმური, მუდმივი ქულები) ---------- */
+async function fetchLeaderboard() {
+  try {
+    const res = await fetch(`${API_BASE}/leaderboard?sid=${encodeURIComponent(getSid())}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json(); // { top: [...], me: {...} }
+  } catch (err) {
+    console.error("leaderboard fetch failed:", err);
+    return null;
+  }
+}
+
+async function saveNickname(nickname) {
+  const res = await fetch(`${API_BASE}/nickname`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sid: getSid(), nickname }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data.nickname;
 }
 
 async function fetchActivity() {
@@ -413,6 +442,62 @@ const clusterGroup = L.markerClusterGroup({
 });
 map.addLayer(clusterGroup);
 
+/* ============================================================
+   გაჩერების მარშრუტების ხაზები (routes.js-დან)
+   ------------------------------------------------------------
+   selectStop-ის დროს ვხატავთ ამ გაჩერებაზე გამავალ ყველა
+   ავტობუსის/მინის/სეზონურ ხაზს — ფერი ტიპის მიხედვით,
+   headsign-იანი tooltip-ით. deselectStop-ზე იფარება. */
+const routeLinesLayer = L.layerGroup().addTo(map);
+
+const ROUTE_LINE_COLORS = {
+  bus: "#2ec4b6",       // მწვანე — ემთხვევა routeChip--bus ფერს
+  minibus: "#1f6fd6",   // ლურჯი — routeChip--minibus
+  seasonal: "#9333ea",  // იასამნისფერი — routeChip--seasonal
+};
+
+function routeColor(routeNum, routeDef) {
+  if (routeDef.seasonal) return ROUTE_LINE_COLORS.seasonal;
+  return routeDef.type === "minibus" ? ROUTE_LINE_COLORS.minibus : ROUTE_LINE_COLORS.bus;
+}
+
+function drawRouteLinesForStop(stop, highlightRoute = null) {
+  routeLinesLayer.clearLayers();
+  if (typeof ROUTES === "undefined") return;
+
+  const allRouteNums = [
+    ...(stop.routesBus || []),
+    ...(stop.routesMinibus || []),
+    ...(stop.routesSeasonal || []),
+  ];
+  const uniqueNums = [...new Set(allRouteNums)];
+
+  uniqueNums.forEach((num) => {
+    const def = ROUTES[num];
+    if (!def || !Array.isArray(def.dirs)) return;
+    const color = routeColor(num, def);
+    const isDimmed = highlightRoute && num !== highlightRoute;
+
+    def.dirs.forEach((dir) => {
+      if (!Array.isArray(dir.coords) || dir.coords.length < 2) return;
+      const line = L.polyline(dir.coords, {
+        color,
+        weight: isDimmed ? 3 : 5,
+        opacity: isDimmed ? 0.25 : 0.9,
+        lineJoin: "round",
+      }).addTo(routeLinesLayer);
+      line.bindTooltip(`${escapeHtml(num)} · ${escapeHtml(dir.headsign || "")}`, {
+        sticky: true,
+      });
+      if (!isDimmed && highlightRoute) line.bringToFront();
+    });
+  });
+}
+
+function clearRouteLines() {
+  routeLinesLayer.clearLayers();
+}
+
 /* ---------- მარკერები ---------- */
 const markers = {};
 
@@ -487,13 +572,21 @@ function refreshMarker(stopId) {
    ------------------------------------------------------------
    მონიშვნა რჩება მანამ, სანამ სხვა გაჩერებას არ ავირჩევთ. ----- */
 let selectedStopId = null;
+let highlightedRoute = null;
 
 function selectStop(stopId) {
   const prev = selectedStopId;
   if (prev === stopId) return;
   selectedStopId = stopId;
+  highlightedRoute = null;
   if (prev) refreshMarker(prev);
-  if (stopId) refreshMarker(stopId);
+  if (stopId) {
+    refreshMarker(stopId);
+    const stop = STOPS_BY_ID[stopId];
+    if (stop) drawRouteLinesForStop(stop);
+  } else {
+    clearRouteLines();
+  }
 }
 
 function deselectStop() {
@@ -501,6 +594,7 @@ function deselectStop() {
   const prev = selectedStopId;
   selectedStopId = null;
   hidePeek();
+  clearRouteLines();
   refreshMarker(prev);
 }
 
@@ -569,19 +663,31 @@ function buildCaptionText(report) {
 
 function renderRouteChips(stop) {
   const busChips = (stop.routesBus || []).map(
-    (r) => `<span class="routeChip routeChip--bus">${escapeHtml(r)}</span>`
+    (r) => `<span class="routeChip routeChip--bus" data-route="${escapeHtml(r)}">${escapeHtml(r)}</span>`
   );
   const miniChips = (stop.routesMinibus || []).map(
-    (r) => `<span class="routeChip routeChip--minibus">${escapeHtml(r)}</span>`
+    (r) => `<span class="routeChip routeChip--minibus" data-route="${escapeHtml(r)}">${escapeHtml(r)}</span>`
   );
   const seasonalChips = (stop.routesSeasonal || []).map(
-    (r) => `<span class="routeChip routeChip--seasonal" title="სეზონური — ეროვნული გამოცდები">${escapeHtml(r)}</span>`
+    (r) => `<span class="routeChip routeChip--seasonal" data-route="${escapeHtml(r)}" title="სეზონური — ეროვნული გამოცდები">${escapeHtml(r)}</span>`
   );
   const all = [...busChips, ...miniChips, ...seasonalChips];
   sheetRouteChips.innerHTML = all.length
     ? all.join("")
     : `<span class="routeChip routeChip--empty">მარშრუტი უცნობია</span>`;
 }
+
+/* Route chip-ზე დაწკაპუნებით — მხოლოდ ის ხაზი გამოინათება, დანარჩენი
+   ბუნდოვნად რჩება. მეორედ იმავეზე დაწკაპუნება ან სხვა chip-ის
+   არჩევა უბრუნებს ყველა ხაზს თანაბარ გამჭვირვალობაზე. */
+sheetRouteChips.addEventListener("click", (e) => {
+  const chip = e.target.closest(".routeChip[data-route]");
+  if (!chip || !selectedStopId) return;
+  const num = chip.dataset.route;
+  highlightedRoute = highlightedRoute === num ? null : num;
+  const stop = STOPS_BY_ID[selectedStopId];
+  if (stop) drawRouteLinesForStop(stop, highlightedRoute);
+});
 
 function renderArrivalsList(arrivals, stop) {
   if (!arrivals || arrivals.length === 0) {
@@ -710,7 +816,7 @@ async function handleReportClick(status, successMsg) {
   }
 
   try {
-    await setReport(stopId, status, stop ? stop.name : "");
+    const { scored } = await setReport(stopId, status, stop ? stop.name : "");
     refreshMarker(stopId);
     closeSheet();
 
@@ -718,8 +824,13 @@ async function handleReportClick(status, successMsg) {
     const contrib = incrementContribution();
     renderContribSection();
     renderCommunitySection();
+    refreshLeaderboardWidgetIfOpen();
+
     if (contrib.leveledUp) {
       showToast(`🎉 ახალი დონე: ${contrib.tier.emoji} ${contrib.tier.label}!`);
+    } else if (scored) {
+      showToast("🏆 +1 ქულა — შენ იყავი პირველი, ვინც ეს გაჩერება მონიშნა!");
+      maybePromptNickname();
     } else {
       showToast(successMsg);
     }
@@ -778,6 +889,7 @@ const menuClose = document.getElementById("menuClose");
 function openMenu() {
   menuOverlay.classList.remove("hidden");
   menuDrawer.classList.remove("hidden");
+  renderLeaderboardSection();
 }
 function closeMenu() {
   menuOverlay.classList.add("hidden");
@@ -1004,6 +1116,130 @@ function renderCommunitySection() {
   const totalReports = entries.reduce((sum, r) => sum + (r.reportsToday || 0), 0);
   const activeStops = entries.length;
   el.textContent = `დღეს გაგზავნილია ${totalReports} შეტყობინება ${activeStops} გაჩერებაზე`;
+}
+
+/* ============================================================
+   ლიდერბორდი (menu drawer-ში)
+   ------------------------------------------------------------
+   ანონიმური, მუდმივი ტოპ-10 + "შენი" პოზიცია (ტოპში იქნება
+   თუ არა). Nickname-ს მომხმარებელი პირველი ქულის მიღებისას
+   ირჩევს — ეს არავითარ ვალდებულებას არ წარმოადგენს, უბრალოდ
+   ტოპ სიაში საკუთარი თავის ამოცნობის საშუალებაა. */
+const NICKNAME_ASKED_KEY = "kontrolio-nickname-asked";
+
+function medalFor(rank) {
+  if (rank === 1) return "🥇";
+  if (rank === 2) return "🥈";
+  if (rank === 3) return "🥉";
+  return null;
+}
+
+async function renderLeaderboardSection() {
+  const listEl = document.getElementById("leaderboardList");
+  const meEl = document.getElementById("leaderboardMe");
+  if (!listEl) return;
+
+  const data = await fetchLeaderboard();
+  if (!data) {
+    listEl.innerHTML = `<p class="leaderboardEmpty">ვერ ჩაიტვირთა</p>`;
+    return;
+  }
+
+  const { top, me } = data;
+
+  if (!top || top.length === 0) {
+    listEl.innerHTML = `<p class="leaderboardEmpty">ჯერ არავის მოუპოვებია ქულა — იყავი პირველი! 🏆</p>`;
+  } else {
+    listEl.innerHTML = top
+      .map((e) => {
+        const medal = medalFor(e.rank);
+        const rankLabel = medal || `#${e.rank}`;
+        return `
+          <div class="leaderboardItem">
+            <span class="leaderboardItem__rank">${rankLabel}</span>
+            <span class="leaderboardItem__name">${escapeHtml(e.nickname)}</span>
+            <span class="leaderboardItem__score">${e.score}</span>
+          </div>`;
+      })
+      .join("");
+  }
+
+  if (meEl) {
+    if (!me || me.score === 0) {
+      meEl.textContent = "შენ ჯერ ქულა არ გაქვს — პირველმა შეამჩნიე კონტროლიორი, მიიღე ქულა 🏆";
+    } else {
+      const posText = me.rank ? `ტოპ #${me.rank}` : "ტოპ 20-ს გარეთ";
+      const nameText = me.nickname ? me.nickname : "(მეტსახელი არჩეული არაა)";
+      meEl.textContent = `შენ: ${nameText} — ${me.score} ქულა (${posText})`;
+    }
+  }
+}
+
+function refreshLeaderboardWidgetIfOpen() {
+  const drawer = document.getElementById("menuDrawer");
+  if (drawer && !drawer.classList.contains("hidden")) {
+    renderLeaderboardSection();
+  }
+}
+
+/* ---------- Nickname prompt ---------- */
+const nicknameOverlay = document.getElementById("nicknameOverlay");
+const nicknameModal = document.getElementById("nicknameModal");
+const nicknameInput = document.getElementById("nicknameInput");
+const nicknameSave = document.getElementById("nicknameSave");
+const nicknameSkip = document.getElementById("nicknameSkip");
+const nicknameError = document.getElementById("nicknameError");
+
+function openNicknamePrompt() {
+  if (!nicknameOverlay) return;
+  nicknameError.textContent = "";
+  nicknameInput.value = "";
+  nicknameOverlay.classList.remove("hidden");
+  nicknameModal.classList.remove("hidden");
+  nicknameInput.focus();
+}
+
+function closeNicknamePrompt() {
+  if (!nicknameOverlay) return;
+  nicknameOverlay.classList.add("hidden");
+  nicknameModal.classList.add("hidden");
+  localStorage.setItem(NICKNAME_ASKED_KEY, "true");
+}
+
+if (nicknameSave) {
+  nicknameSave.addEventListener("click", async () => {
+    const value = nicknameInput.value.trim();
+    if (!value) {
+      nicknameError.textContent = "შეიყვანე მეტსახელი";
+      return;
+    }
+    try {
+      await saveNickname(value);
+      localStorage.setItem("_kontrolio_has_nickname", "true");
+      closeNicknamePrompt();
+      showToast("მეტსახელი შენახულია 🎉");
+      refreshLeaderboardWidgetIfOpen();
+    } catch (err) {
+      nicknameError.textContent = err.message || "ვერ შეინახა — სცადე სხვა მეტსახელი";
+    }
+  });
+}
+if (nicknameSkip) {
+  nicknameSkip.addEventListener("click", closeNicknamePrompt);
+}
+if (nicknameInput) {
+  nicknameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") nicknameSave.click();
+  });
+}
+
+/* პირველი ქულის მიღებისას ვთხოვთ მეტსახელს (ერთხელ, თუ უკვე არ
+   შეურჩევია და აქამდე არ გამოგვითხოვია). */
+function maybePromptNickname() {
+  if (localStorage.getItem(NICKNAME_ASKED_KEY) === "true") return;
+  const existing = localStorage.getItem("_kontrolio_has_nickname");
+  if (existing === "true") return;
+  openNicknamePrompt();
 }
 
 /* ---------- Toast ---------- */
